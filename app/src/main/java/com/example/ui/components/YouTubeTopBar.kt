@@ -1,0 +1,326 @@
+package com.example.ui.components
+
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.Cast
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Notifications
+import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.Shuffle
+import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material3.Badge
+import androidx.compose.material3.BadgedBox
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import coil.compose.AsyncImage
+import androidx.compose.ui.layout.ContentScale
+import com.example.ui.theme.LocalAppAccentColor
+import com.example.ui.theme.LocalLiquidGlassConfig
+import com.example.ui.theme.LocalUiTheme
+import com.example.ui.theme.liquidGlassSurface
+import com.example.ui.theme.YtAvatarPurple
+import com.example.ui.theme.YtDarkBackground
+import com.example.ui.theme.YtRed
+import com.example.ui.theme.YtSurfaceDark
+import com.example.ui.theme.YtSurfaceVariant
+import com.example.ui.theme.YtTextPrimary
+import com.example.ui.theme.YtTextSecondary
+
+import com.example.data.model.CustomIconItem
+import com.example.data.model.IconLocations
+import com.example.util.IconCatalog
+
+@Composable
+fun YouTubeTopBar(
+    isSearchActive: Boolean,
+    searchQuery: String,
+    onSearchQueryChange: (String) -> Unit,
+    onSearchToggle: (Boolean) -> Unit,
+    onNotificationsClick: () -> Unit,
+    onProfileClick: () -> Unit,
+    onShuffleClick: () -> Unit = {},
+    unreadNotificationCount: Int = 0,
+    userAvatarUri: String? = null,
+    userName: String = "Muhannad Murtaza",
+    customIcons: List<CustomIconItem> = emptyList(),
+    onCustomIconClick: (CustomIconItem) -> Unit = {},
+    modifier: Modifier = Modifier
+) {
+    val currentTheme = LocalUiTheme.current
+    val accentColor = LocalAppAccentColor.current
+    val glassConfig = LocalLiquidGlassConfig.current
+    val isGlass = glassConfig.isEnabled
+
+    Box(
+        modifier = modifier
+            .fillMaxWidth()
+            .then(
+                if (isGlass) {
+                    Modifier.liquidGlassSurface(
+                        shape = RoundedCornerShape(bottomStart = 16.dp, bottomEnd = 16.dp),
+                        config = glassConfig,
+                        accentColor = accentColor,
+                        elevation = 8.dp
+                    )
+                } else {
+                    Modifier.background(MaterialTheme.colorScheme.background)
+                }
+            )
+            .statusBarsPadding()
+            .height(56.dp)
+            .padding(horizontal = 14.dp),
+        contentAlignment = Alignment.CenterStart
+    ) {
+        if (isSearchActive) {
+            // Expanded search bar
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(42.dp)
+                    .then(
+                        if (isGlass) {
+                            Modifier.liquidGlassSurface(
+                                shape = RoundedCornerShape(21.dp),
+                                config = glassConfig,
+                                elevation = 4.dp
+                            )
+                        } else {
+                            Modifier
+                                .clip(RoundedCornerShape(21.dp))
+                                .background(YtSurfaceVariant)
+                        }
+                    )
+                    .padding(horizontal = 8.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                IconButton(
+                    onClick = { onSearchToggle(false) },
+                    modifier = Modifier.size(36.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                        contentDescription = "Back",
+                        tint = YtTextPrimary,
+                        modifier = Modifier.size(20.dp)
+                    )
+                }
+
+                Spacer(modifier = Modifier.width(4.dp))
+
+                BasicTextField(
+                    value = searchQuery,
+                    onValueChange = onSearchQueryChange,
+                    modifier = Modifier
+                        .weight(1f)
+                        .testTag("search_text_input"),
+                    singleLine = true,
+                    textStyle = TextStyle(
+                        color = YtTextPrimary,
+                        fontSize = 15.sp
+                    ),
+                    cursorBrush = SolidColor(accentColor),
+                    decorationBox = { innerTextField ->
+                        if (searchQuery.isEmpty()) {
+                            Text(
+                                text = "Search local videos...",
+                                color = YtTextSecondary,
+                                fontSize = 15.sp
+                            )
+                        }
+                        innerTextField()
+                    }
+                )
+
+                if (searchQuery.isNotEmpty()) {
+                    IconButton(
+                        onClick = { onSearchQueryChange("") },
+                        modifier = Modifier.size(36.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Close,
+                            contentDescription = "Clear search",
+                            tint = YtTextSecondary,
+                            modifier = Modifier.size(18.dp)
+                        )
+                    }
+                }
+            }
+        } else {
+            // Standard YouTube top bar
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                // YouTube / MyTube Logo
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.testTag("youtube_logo_row")
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(28.dp, 20.dp)
+                            .clip(RoundedCornerShape(6.dp))
+                            .background(accentColor),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.PlayArrow,
+                            contentDescription = null,
+                            tint = Color.White,
+                            modifier = Modifier.size(16.dp)
+                        )
+                    }
+
+                    Spacer(modifier = Modifier.width(6.dp))
+
+                    Text(
+                        text = "MyTube",
+                        color = YtTextPrimary,
+                        fontSize = 19.sp,
+                        fontWeight = FontWeight.Bold,
+                        letterSpacing = (-0.5).sp,
+                        fontFamily = FontFamily.SansSerif
+                    )
+                }
+
+                Spacer(modifier = Modifier.weight(1f))
+
+                // 1. Search Icon
+                IconButton(
+                    onClick = { onSearchToggle(true) },
+                    modifier = Modifier
+                        .size(40.dp)
+                        .testTag("search_icon_button")
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Search,
+                        contentDescription = "Search",
+                        tint = YtTextPrimary,
+                        modifier = Modifier.size(22.dp)
+                    )
+                }
+
+                // 2. Notification Bell with Badge
+                IconButton(
+                    onClick = onNotificationsClick,
+                    modifier = Modifier
+                        .size(40.dp)
+                        .testTag("notification_button")
+                ) {
+                    if (unreadNotificationCount > 0) {
+                        BadgedBox(
+                            badge = {
+                                Badge(
+                                    containerColor = accentColor,
+                                    contentColor = Color.White,
+                                    modifier = Modifier.size(16.dp)
+                                ) {
+                                    val badgeText = if (unreadNotificationCount > 99) "99+" else unreadNotificationCount.toString()
+                                    Text(badgeText, fontSize = 9.sp, fontWeight = FontWeight.Bold)
+                                }
+                            }
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Notifications,
+                                contentDescription = "Notifications",
+                                tint = YtTextPrimary,
+                                modifier = Modifier.size(22.dp)
+                            )
+                        }
+                    } else {
+                        Icon(
+                            imageVector = Icons.Default.Notifications,
+                            contentDescription = "Notifications",
+                            tint = YtTextPrimary,
+                            modifier = Modifier.size(22.dp)
+                        )
+                    }
+                }
+
+                // 3. Three-Dots Overflow Menu (Matching Reference Photo Screen 1 & 4)
+                var showOverflowMenu by remember { mutableStateOf(false) }
+                Box {
+                    IconButton(
+                        onClick = { showOverflowMenu = !showOverflowMenu },
+                        modifier = Modifier
+                            .size(40.dp)
+                            .testTag("top_bar_more_button")
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.MoreVert,
+                            contentDescription = "More options",
+                            tint = YtTextPrimary,
+                            modifier = Modifier.size(22.dp)
+                        )
+                    }
+
+                    DropdownMenu(
+                        expanded = showOverflowMenu,
+                        onDismissRequest = { showOverflowMenu = false },
+                        modifier = Modifier.background(YtSurfaceDark)
+                    ) {
+                        DropdownMenuItem(
+                            text = { Text("Profile", color = YtTextPrimary) },
+                            onClick = {
+                                showOverflowMenu = false
+                                onProfileClick()
+                            },
+                            leadingIcon = {
+                                Icon(Icons.Default.PlayArrow, contentDescription = null, tint = accentColor, modifier = Modifier.size(18.dp))
+                            }
+                        )
+                        DropdownMenuItem(
+                            text = { Text("Shuffle Videos", color = YtTextPrimary) },
+                            onClick = {
+                                showOverflowMenu = false
+                                onShuffleClick()
+                            },
+                            leadingIcon = {
+                                Icon(Icons.Default.Shuffle, contentDescription = null, tint = YtTextSecondary, modifier = Modifier.size(18.dp))
+                            }
+                        )
+                    }
+                }
+            }
+        }
+    }
+}

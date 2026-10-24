@@ -1,0 +1,1339 @@
+package com.example.data
+
+import android.content.Context
+import android.content.SharedPreferences
+import com.example.data.model.AppElementCatalog
+import com.example.data.model.AppElementConfig
+import com.example.data.model.ShortsActionConfig
+import com.example.data.model.ShortsActionDefaults
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.launch
+
+class SettingsManager(context: Context) {
+    val dataStore = SettingsDataStore(context)
+    private val scope = CoroutineScope(Dispatchers.IO)
+    private val prefs: SharedPreferences = context.getSharedPreferences("mytube_settings", Context.MODE_PRIVATE)
+
+    // User Profile
+    private val _userName = MutableStateFlow(prefs.getString("user_name", "Muhannad Murtaza") ?: "Muhannad Murtaza")
+    val userName: StateFlow<String> = _userName.asStateFlow()
+
+    private val _userHandle = MutableStateFlow(prefs.getString("user_handle", "@muhannad") ?: "@muhannad")
+    val userHandle: StateFlow<String> = _userHandle.asStateFlow()
+
+    private val _userAvatarUri = MutableStateFlow(prefs.getString("user_avatar_uri", null))
+    val userAvatarUri: StateFlow<String?> = _userAvatarUri.asStateFlow()
+
+    fun updateProfile(name: String, handle: String, avatarUri: String?) {
+        _userName.value = name.trim()
+        _userHandle.value = handle.trim()
+        _userAvatarUri.value = avatarUri
+        prefs.edit()
+            .putString("user_name", name.trim())
+            .putString("user_handle", handle.trim())
+            .putString("user_avatar_uri", avatarUri)
+            .apply()
+    }
+
+    // General
+    private val _remindBreak = MutableStateFlow(prefs.getBoolean("remind_break", false))
+    val remindBreak: StateFlow<Boolean> = _remindBreak.asStateFlow()
+
+    private val _breakIntervalMinutes = MutableStateFlow(prefs.getInt("break_interval", 60))
+    val breakIntervalMinutes: StateFlow<Int> = _breakIntervalMinutes.asStateFlow()
+
+    private val _remindBedtime = MutableStateFlow(prefs.getBoolean("remind_bedtime", false))
+    val remindBedtime: StateFlow<Boolean> = _remindBedtime.asStateFlow()
+
+    private val _bedtimeHour = MutableStateFlow(prefs.getInt("bedtime_hour", 23))
+    val bedtimeHour: StateFlow<Int> = _bedtimeHour.asStateFlow()
+
+    // UI Theme Customization
+    companion object {
+        val THEME_OPTIONS = listOf(
+            "Dark Mode",
+            "Light Mode",
+            "Liquid Glass (Dark)",
+            "Liquid Glass (Light)",
+            "Liquid Glass with Reflection"
+        )
+
+        val ACCENT_COLOR_OPTIONS = listOf(
+            "YouTube Red" to 0xFFFF0033L,
+            "Maro / Maroon" to 0xFF800000L,
+            "Crimson Neon" to 0xFFFF1744L,
+            "Electric Cyan" to 0xFF00E5FFL,
+            "Vibrant Emerald" to 0xFF00E676L,
+            "Purple Flame" to 0xFFD500F9L,
+            "Sunset Gold" to 0xFFFFAB00L,
+            "Deep Sky Blue" to 0xFF2979FFL,
+            "Hot Pink" to 0xFFFF4081L
+        )
+    }
+
+    private val _uiTheme = MutableStateFlow(prefs.getString("ui_theme", "Dark Mode") ?: "Dark Mode")
+    val uiTheme: StateFlow<String> = _uiTheme.asStateFlow()
+
+    private val _darkTheme = MutableStateFlow(prefs.getBoolean("dark_theme", true))
+    val darkTheme: StateFlow<Boolean> = _darkTheme.asStateFlow()
+
+    // Custom Accent Color (Change app Red color: subscribe button, like button, icons, progress bars, etc.)
+    private val _customAccentColorHex = MutableStateFlow(prefs.getLong("custom_accent_color_hex", 0xFFFF0033L))
+    val customAccentColorHex: StateFlow<Long> = _customAccentColorHex.asStateFlow()
+
+    fun setCustomAccentColorHex(colorLong: Long) {
+        _customAccentColorHex.value = colorLong
+        prefs.edit().putLong("custom_accent_color_hex", colorLong).apply()
+    }
+
+    // Custom Background Photo (Persistent across app restarts)
+    private val _customBackgroundUri = MutableStateFlow(prefs.getString("custom_background_uri", null))
+    val customBackgroundUri: StateFlow<String?> = _customBackgroundUri.asStateFlow()
+
+    fun setCustomBackgroundUri(uri: String?) {
+        _customBackgroundUri.value = uri
+        if (uri == null) {
+            prefs.edit().remove("custom_background_uri").apply()
+        } else {
+            prefs.edit().putString("custom_background_uri", uri).apply()
+        }
+    }
+
+    // First-launch onboarding state (saved persistently in local preferences)
+    private val _onboardingCompleted = MutableStateFlow(prefs.getBoolean("onboarding_completed", false))
+    val onboardingCompleted: StateFlow<Boolean> = _onboardingCompleted.asStateFlow()
+
+    fun setOnboardingCompleted(completed: Boolean = true) {
+        _onboardingCompleted.value = completed
+        prefs.edit().putBoolean("onboarding_completed", completed).apply()
+    }
+
+    // Custom Background Dimming & Blur
+    private val _customBackgroundDim = MutableStateFlow(prefs.getFloat("custom_background_dim", 0.75f))
+    val customBackgroundDim: StateFlow<Float> = _customBackgroundDim.asStateFlow()
+
+    fun setCustomBackgroundDim(dim: Float) {
+        _customBackgroundDim.value = dim
+        prefs.edit().putFloat("custom_background_dim", dim).apply()
+    }
+
+    // Ambient Neon Lighting / Glow for Player
+    private val _ambientNeonLighting = MutableStateFlow(prefs.getBoolean("ambient_neon_lighting", true))
+    val ambientNeonLighting: StateFlow<Boolean> = _ambientNeonLighting.asStateFlow()
+
+    fun setAmbientNeonLighting(enabled: Boolean) {
+        _ambientNeonLighting.value = enabled
+        prefs.edit().putBoolean("ambient_neon_lighting", enabled).apply()
+    }
+
+    fun setUiTheme(theme: String) {
+        _uiTheme.value = theme
+        prefs.edit().putString("ui_theme", theme).apply()
+        val isDark = theme != "Light Mode" && theme != "Liquid Glass (Light)"
+        _darkTheme.value = isDark
+        prefs.edit().putBoolean("dark_theme", isDark).apply()
+        scope.launch { dataStore.setDarkMode(isDark) }
+    }
+
+    private val _doubleTapSeekSeconds = MutableStateFlow(prefs.getInt("seek_duration", 10))
+    val doubleTapSeekSeconds: StateFlow<Int> = _doubleTapSeekSeconds.asStateFlow()
+
+    private val _zoomToFill = MutableStateFlow(prefs.getBoolean("zoom_to_fill", false))
+    val zoomToFill: StateFlow<Boolean> = _zoomToFill.asStateFlow()
+
+    private val _appLanguage = MutableStateFlow(prefs.getString("app_language", "English (US)") ?: "English (US)")
+    val appLanguage: StateFlow<String> = _appLanguage.asStateFlow()
+
+    // Playback
+    private val _autoplayNext = MutableStateFlow(prefs.getBoolean("autoplay_next", true))
+    val autoplayNext: StateFlow<Boolean> = _autoplayNext.asStateFlow()
+
+    private val _defaultSpeed = MutableStateFlow(prefs.getFloat("default_speed", 1.0f))
+    val defaultSpeed: StateFlow<Float> = _defaultSpeed.asStateFlow()
+
+    private val _videoQuality = MutableStateFlow(prefs.getString("video_quality", "Auto (recommended)") ?: "Auto (recommended)")
+    val videoQuality: StateFlow<String> = _videoQuality.asStateFlow()
+
+    private val _captionsEnabled = MutableStateFlow(prefs.getBoolean("captions_enabled", false))
+    val captionsEnabled: StateFlow<Boolean> = _captionsEnabled.asStateFlow()
+
+    private val _captionSize = MutableStateFlow(prefs.getString("caption_size", "Normal") ?: "Normal")
+    val captionSize: StateFlow<String> = _captionSize.asStateFlow()
+
+    // Downloads
+    private val _downloadQuality = MutableStateFlow(prefs.getString("download_quality", "Full HD (1080p)") ?: "Full HD (1080p)")
+    val downloadQuality: StateFlow<String> = _downloadQuality.asStateFlow()
+
+    private val _smartDownloads = MutableStateFlow(prefs.getBoolean("smart_downloads", true))
+    val smartDownloads: StateFlow<Boolean> = _smartDownloads.asStateFlow()
+
+    // History & Privacy
+    private val _pauseHistory = MutableStateFlow(prefs.getBoolean("pause_history", false))
+    val pauseHistory: StateFlow<Boolean> = _pauseHistory.asStateFlow()
+
+    // Notifications
+    private val _scheduledDigest = MutableStateFlow(prefs.getBoolean("scheduled_digest", true))
+    val scheduledDigest: StateFlow<Boolean> = _scheduledDigest.asStateFlow()
+
+    private val _subscriptionsNotifications = MutableStateFlow(prefs.getBoolean("subscriptions_notifications", true))
+    val subscriptionsNotifications: StateFlow<Boolean> = _subscriptionsNotifications.asStateFlow()
+
+    private val _recommendedNotifications = MutableStateFlow(prefs.getBoolean("recommended_notifications", true))
+    val recommendedNotifications: StateFlow<Boolean> = _recommendedNotifications.asStateFlow()
+
+    private val _notificationsEnabled = MutableStateFlow(prefs.getBoolean("notifications_master", true))
+    val notificationsEnabled: StateFlow<Boolean> = _notificationsEnabled.asStateFlow()
+
+    private val _inAppSounds = MutableStateFlow(prefs.getBoolean("in_app_sounds", true))
+    val inAppSounds: StateFlow<Boolean> = _inAppSounds.asStateFlow()
+
+    // Feeds & Upload
+    private val _playbackInFeeds = MutableStateFlow(prefs.getString("playback_in_feeds", "Always on") ?: "Always on")
+    val playbackInFeeds: StateFlow<String> = _playbackInFeeds.asStateFlow()
+
+    private val _uploadQuality = MutableStateFlow(prefs.getString("upload_quality", "Full HD (1080p)") ?: "Full HD (1080p)")
+    val uploadQuality: StateFlow<String> = _uploadQuality.asStateFlow()
+
+    // Download over Wi-Fi
+    private val _downloadWifiOnly = MutableStateFlow(prefs.getBoolean("download_wifi_only", true))
+    val downloadWifiOnly: StateFlow<Boolean> = _downloadWifiOnly.asStateFlow()
+
+    // Search History Privacy
+    private val _pauseSearchHistory = MutableStateFlow(prefs.getBoolean("pause_search_history", false))
+    val pauseSearchHistory: StateFlow<Boolean> = _pauseSearchHistory.asStateFlow()
+
+    // Experimental Features
+    private val _experimentalAiClips = MutableStateFlow(prefs.getBoolean("experimental_ai_clips", true))
+    val experimentalAiClips: StateFlow<Boolean> = _experimentalAiClips.asStateFlow()
+
+    private val _experimentalAudioBooster = MutableStateFlow(prefs.getBoolean("experimental_audio_booster", false))
+    val experimentalAudioBooster: StateFlow<Boolean> = _experimentalAudioBooster.asStateFlow()
+
+    fun setRemindBreak(enabled: Boolean) {
+        _remindBreak.value = enabled
+        prefs.edit().putBoolean("remind_break", enabled).apply()
+        scope.launch { dataStore.setRemindBreak(enabled) }
+    }
+
+    fun setBreakInterval(minutes: Int) {
+        _breakIntervalMinutes.value = minutes
+        prefs.edit().putInt("break_interval", minutes).apply()
+        scope.launch { dataStore.setBreakIntervalMinutes(minutes) }
+    }
+
+    fun setRemindBedtime(enabled: Boolean) {
+        _remindBedtime.value = enabled
+        prefs.edit().putBoolean("remind_bedtime", enabled).apply()
+        scope.launch { dataStore.setRemindBedtime(enabled) }
+    }
+
+    fun setBedtimeHour(hour: Int) {
+        _bedtimeHour.value = hour
+        prefs.edit().putInt("bedtime_hour", hour).apply()
+    }
+
+    fun setDarkTheme(enabled: Boolean) {
+        _darkTheme.value = enabled
+        _uiTheme.value = if (enabled) "Dark Mode" else "Light Mode"
+        prefs.edit().putBoolean("dark_theme", enabled).putString("ui_theme", _uiTheme.value).apply()
+        scope.launch { dataStore.setDarkMode(enabled) }
+    }
+
+    fun setDoubleTapSeekSeconds(seconds: Int) {
+        _doubleTapSeekSeconds.value = seconds
+        prefs.edit().putInt("seek_duration", seconds).apply()
+        scope.launch { dataStore.setDoubleTapSeekSeconds(seconds) }
+    }
+
+    fun setZoomToFill(enabled: Boolean) {
+        _zoomToFill.value = enabled
+        prefs.edit().putBoolean("zoom_to_fill", enabled).apply()
+        scope.launch { dataStore.setZoomToFill(enabled) }
+    }
+
+    fun setAppLanguage(lang: String) {
+        _appLanguage.value = lang
+        prefs.edit().putString("app_language", lang).apply()
+    }
+
+    fun setAutoplayNext(enabled: Boolean) {
+        _autoplayNext.value = enabled
+        prefs.edit().putBoolean("autoplay_next", enabled).apply()
+        scope.launch { dataStore.setAutoplayNext(enabled) }
+    }
+
+    fun setDefaultSpeed(speed: Float) {
+        _defaultSpeed.value = speed
+        prefs.edit().putFloat("default_speed", speed).apply()
+        scope.launch { dataStore.setPlaybackSpeed(speed) }
+    }
+
+    fun setVideoQuality(quality: String) {
+        _videoQuality.value = quality
+        prefs.edit().putString("video_quality", quality).apply()
+        scope.launch { dataStore.setVideoQuality(quality) }
+    }
+
+    fun setCaptionsEnabled(enabled: Boolean) {
+        _captionsEnabled.value = enabled
+        prefs.edit().putBoolean("captions_enabled", enabled).apply()
+        scope.launch { dataStore.setCaptionsEnabled(enabled) }
+    }
+
+    fun setCaptionSize(size: String) {
+        _captionSize.value = size
+        prefs.edit().putString("caption_size", size).apply()
+    }
+
+    fun setDownloadQuality(quality: String) {
+        _downloadQuality.value = quality
+        prefs.edit().putString("download_quality", quality).apply()
+        scope.launch { dataStore.setDownloadQuality(quality) }
+    }
+
+    fun setSmartDownloads(enabled: Boolean) {
+        _smartDownloads.value = enabled
+        prefs.edit().putBoolean("smart_downloads", enabled).apply()
+        scope.launch { dataStore.setSmartDownloads(enabled) }
+    }
+
+    fun setPauseHistory(paused: Boolean) {
+        _pauseHistory.value = paused
+        prefs.edit().putBoolean("pause_history", paused).apply()
+        scope.launch { dataStore.setPauseHistory(paused) }
+    }
+
+    fun setNotificationsEnabled(enabled: Boolean) {
+        _notificationsEnabled.value = enabled
+        prefs.edit().putBoolean("notifications_master", enabled).apply()
+        scope.launch { dataStore.setNotificationsEnabled(enabled) }
+    }
+
+    fun setScheduledDigest(enabled: Boolean) {
+        _scheduledDigest.value = enabled
+        prefs.edit().putBoolean("scheduled_digest", enabled).apply()
+        scope.launch { dataStore.setScheduledDigest(enabled) }
+    }
+
+    fun setInAppSounds(enabled: Boolean) {
+        _inAppSounds.value = enabled
+        prefs.edit().putBoolean("in_app_sounds", enabled).apply()
+    }
+
+    fun setPlaybackInFeeds(setting: String) {
+        _playbackInFeeds.value = setting
+        prefs.edit().putString("playback_in_feeds", setting).apply()
+        scope.launch { dataStore.setPlaybackInFeeds(setting) }
+    }
+
+    fun setUploadQuality(quality: String) {
+        _uploadQuality.value = quality
+        prefs.edit().putString("upload_quality", quality).apply()
+        scope.launch { dataStore.setUploadQuality(quality) }
+    }
+
+    fun setDownloadWifiOnly(enabled: Boolean) {
+        _downloadWifiOnly.value = enabled
+        prefs.edit().putBoolean("download_wifi_only", enabled).apply()
+        scope.launch { dataStore.setDownloadWifiOnly(enabled) }
+    }
+
+    fun setPauseSearchHistory(paused: Boolean) {
+        _pauseSearchHistory.value = paused
+        prefs.edit().putBoolean("pause_search_history", paused).apply()
+        scope.launch { dataStore.setPauseSearchHistory(paused) }
+    }
+
+    fun setSubscriptionsNotifications(enabled: Boolean) {
+        _subscriptionsNotifications.value = enabled
+        prefs.edit().putBoolean("subscriptions_notifications", enabled).apply()
+        scope.launch { dataStore.setSubscriptionsNotifications(enabled) }
+    }
+
+    fun setRecommendedNotifications(enabled: Boolean) {
+        _recommendedNotifications.value = enabled
+        prefs.edit().putBoolean("recommended_notifications", enabled).apply()
+        scope.launch { dataStore.setRecommendedNotifications(enabled) }
+    }
+
+    fun setExperimentalAiClips(enabled: Boolean) {
+        _experimentalAiClips.value = enabled
+        prefs.edit().putBoolean("experimental_ai_clips", enabled).apply()
+    }
+
+    fun setExperimentalAudioBooster(enabled: Boolean) {
+        _experimentalAudioBooster.value = enabled
+        prefs.edit().putBoolean("experimental_audio_booster", enabled).apply()
+    }
+
+    // Search History
+    private val _searchHistory = MutableStateFlow<List<String>>(
+        prefs.getStringSet("search_history_items", null)?.toList()
+            ?: listOf("Trending Shorts", "Nature 4K", "Music Beat", "Local Media")
+    )
+    val searchHistory: StateFlow<List<String>> = _searchHistory.asStateFlow()
+
+    fun addSearchQuery(query: String) {
+        val trimmed = query.trim()
+        if (trimmed.isBlank() || _pauseSearchHistory.value) return
+        val current = _searchHistory.value.toMutableList()
+        current.remove(trimmed)
+        current.add(0, trimmed)
+        val trimmedList = current.take(20)
+        _searchHistory.value = trimmedList
+        prefs.edit().putStringSet("search_history_items", trimmedList.toSet()).apply()
+    }
+
+    fun removeSearchQuery(query: String) {
+        val current = _searchHistory.value.toMutableList()
+        current.remove(query)
+        _searchHistory.value = current
+        prefs.edit().putStringSet("search_history_items", current.toSet()).apply()
+    }
+
+    fun clearSearchHistory() {
+        _searchHistory.value = emptyList()
+        prefs.edit().remove("search_history_items").apply()
+    }
+
+    // ==========================================
+    // LIQUID GLASS & NEON CUSTOMIZATION SYSTEM
+    // ==========================================
+    private val _liquidGlassMaster = MutableStateFlow(prefs.getBoolean("lg_master_enabled", true))
+    val liquidGlassMaster: StateFlow<Boolean> = _liquidGlassMaster.asStateFlow()
+
+    private val _liquidGlassIntensity = MutableStateFlow(prefs.getFloat("lg_intensity", 0.85f))
+    val liquidGlassIntensity: StateFlow<Float> = _liquidGlassIntensity.asStateFlow()
+
+    private val _liquidGlassBlur = MutableStateFlow(prefs.getFloat("lg_blur", 24f))
+    val liquidGlassBlur: StateFlow<Float> = _liquidGlassBlur.asStateFlow()
+
+    private val _liquidGlassTransparency = MutableStateFlow(prefs.getFloat("lg_transparency", 0.70f))
+    val liquidGlassTransparency: StateFlow<Float> = _liquidGlassTransparency.asStateFlow()
+
+    private val _liquidGlassRefraction = MutableStateFlow(prefs.getFloat("lg_refraction", 0.65f))
+    val liquidGlassRefraction: StateFlow<Float> = _liquidGlassRefraction.asStateFlow()
+
+    private val _liquidGlassSpecular = MutableStateFlow(prefs.getBoolean("lg_specular", true))
+    val liquidGlassSpecular: StateFlow<Boolean> = _liquidGlassSpecular.asStateFlow()
+
+    private val _liquidGlassBorderThickness = MutableStateFlow(prefs.getFloat("lg_border_thickness", 1.0f))
+    val liquidGlassBorderThickness: StateFlow<Float> = _liquidGlassBorderThickness.asStateFlow()
+
+    private val _liquidGlassCornerRadius = MutableStateFlow(prefs.getFloat("lg_corner_radius", 16f))
+    val liquidGlassCornerRadius: StateFlow<Float> = _liquidGlassCornerRadius.asStateFlow()
+
+    private val _liquidGlassRefractionHeight = MutableStateFlow(prefs.getFloat("lg_refraction_height", 0.65f))
+    val liquidGlassRefractionHeight: StateFlow<Float> = _liquidGlassRefractionHeight.asStateFlow()
+
+    private val _liquidGlassLayerRefraction = MutableStateFlow(prefs.getBoolean("lg_layer_refraction", true))
+    val liquidGlassLayerRefraction: StateFlow<Boolean> = _liquidGlassLayerRefraction.asStateFlow()
+
+    private val _liquidGlassDepthEnabled = MutableStateFlow(prefs.getBoolean("lg_depth_enabled", true))
+    val liquidGlassDepthEnabled: StateFlow<Boolean> = _liquidGlassDepthEnabled.asStateFlow()
+
+    private val _liquidGlassVibrancy = MutableStateFlow(prefs.getFloat("lg_vibrancy", 0.85f))
+    val liquidGlassVibrancy: StateFlow<Float> = _liquidGlassVibrancy.asStateFlow()
+
+    private val _liquidGlassEdgeHighlights = MutableStateFlow(prefs.getFloat("lg_edge_highlights", 0.80f))
+    val liquidGlassEdgeHighlights: StateFlow<Float> = _liquidGlassEdgeHighlights.asStateFlow()
+
+    private val _liquidGlassReflection = MutableStateFlow(prefs.getFloat("lg_reflection", 0.75f))
+    val liquidGlassReflection: StateFlow<Float> = _liquidGlassReflection.asStateFlow()
+
+    private val _liquidGlassTintColorHex = MutableStateFlow(prefs.getLong("lg_tint_color_hex", 0x35141928L))
+    val liquidGlassTintColorHex: StateFlow<Long> = _liquidGlassTintColorHex.asStateFlow()
+
+    private val _liquidGlassShadowElevation = MutableStateFlow(prefs.getFloat("lg_shadow_elevation", 6f))
+    val liquidGlassShadowElevation: StateFlow<Float> = _liquidGlassShadowElevation.asStateFlow()
+
+    private val _liquidGlassAnimationIntensity = MutableStateFlow(prefs.getFloat("lg_anim_intensity", 1.0f))
+    val liquidGlassAnimationIntensity: StateFlow<Float> = _liquidGlassAnimationIntensity.asStateFlow()
+
+    private val _liquidGlassPerformanceMode = MutableStateFlow(prefs.getString("lg_perf_mode", "Quality") ?: "Quality")
+    val liquidGlassPerformanceMode: StateFlow<String> = _liquidGlassPerformanceMode.asStateFlow()
+
+    // Directional Light Angle (0° .. 360°)
+    private val _liquidGlassLightAngle = MutableStateFlow(prefs.getFloat("lg_light_angle", 315f))
+    val liquidGlassLightAngle: StateFlow<Float> = _liquidGlassLightAngle.asStateFlow()
+
+    // 3D Liquid Drop Central Reflection (Disabled to remove central white spot artifact)
+    private val _liquidGlassDropReflectionEnabled = MutableStateFlow(prefs.getBoolean("lg_drop_refl_enabled", false))
+    val liquidGlassDropReflectionEnabled: StateFlow<Boolean> = _liquidGlassDropReflectionEnabled.asStateFlow()
+
+    // Optical Tilt Control ("ٹلٹ"): Pronounced border displacement, smooth center curvature
+    private val _opticalTiltStrength = MutableStateFlow(prefs.getFloat("optical_tilt_strength", 0.85f))
+    val opticalTiltStrength: StateFlow<Float> = _opticalTiltStrength.asStateFlow()
+
+    // Animation Smoothness & Physics ("سمود اینیمیشن"): "Silky Smooth", "Bouncy Spring", "Cinematic Slow", "Instant Snappy"
+    private val _animationSmoothnessMode = MutableStateFlow(prefs.getString("animation_smoothness_mode", "Silky Smooth") ?: "Silky Smooth")
+    val animationSmoothnessMode: StateFlow<String> = _animationSmoothnessMode.asStateFlow()
+
+    private val _liquidGlassDropReflectionSize = MutableStateFlow(prefs.getFloat("lg_drop_refl_size", 0.55f))
+    val liquidGlassDropReflectionSize: StateFlow<Float> = _liquidGlassDropReflectionSize.asStateFlow()
+
+    private val _liquidGlassDropReflectionIntensity = MutableStateFlow(prefs.getFloat("lg_drop_refl_intensity", 0.75f))
+    val liquidGlassDropReflectionIntensity: StateFlow<Float> = _liquidGlassDropReflectionIntensity.asStateFlow()
+
+    private val _liquidGlassDropReflectionX = MutableStateFlow(prefs.getFloat("lg_drop_refl_x", 0.50f))
+    val liquidGlassDropReflectionX: StateFlow<Float> = _liquidGlassDropReflectionX.asStateFlow()
+
+    private val _liquidGlassDropReflectionY = MutableStateFlow(prefs.getFloat("lg_drop_refl_y", 0.35f))
+    val liquidGlassDropReflectionY: StateFlow<Float> = _liquidGlassDropReflectionY.asStateFlow()
+
+    private val _liquidGlassDropReflectionSoftness = MutableStateFlow(prefs.getFloat("lg_drop_refl_softness", 0.65f))
+    val liquidGlassDropReflectionSoftness: StateFlow<Float> = _liquidGlassDropReflectionSoftness.asStateFlow()
+
+    private val _liquidGlassDropSecondaryHighlight = MutableStateFlow(prefs.getFloat("lg_drop_sec_highlight", 0.45f))
+    val liquidGlassDropSecondaryHighlight: StateFlow<Float> = _liquidGlassDropSecondaryHighlight.asStateFlow()
+
+    // 3D Lens Geometry & Curvature
+    private val _liquidGlassConvexCurvature = MutableStateFlow(prefs.getFloat("lg_convex_curvature", 0.70f))
+    val liquidGlassConvexCurvature: StateFlow<Float> = _liquidGlassConvexCurvature.asStateFlow()
+
+    private val _liquidGlassBevelStrength = MutableStateFlow(prefs.getFloat("lg_bevel_strength", 0.80f))
+    val liquidGlassBevelStrength: StateFlow<Float> = _liquidGlassBevelStrength.asStateFlow()
+
+    private val _liquidGlassDepthIntensity = MutableStateFlow(prefs.getFloat("lg_depth_intensity", 0.75f))
+    val liquidGlassDepthIntensity: StateFlow<Float> = _liquidGlassDepthIntensity.asStateFlow()
+
+    private val _liquidGlassSmoothness = MutableStateFlow(prefs.getFloat("lg_glass_smoothness", 0.85f))
+    val liquidGlassSmoothness: StateFlow<Float> = _liquidGlassSmoothness.asStateFlow()
+
+    // Subscribe Button Customization
+    private val _subscribeGlassEnabled = MutableStateFlow(prefs.getBoolean("sub_glass_enabled", true))
+    val subscribeGlassEnabled: StateFlow<Boolean> = _subscribeGlassEnabled.asStateFlow()
+
+    private val _subscribeGlassTintHex = MutableStateFlow(prefs.getLong("sub_glass_tint_hex", 0xFFFFFFFFL))
+    val subscribeGlassTintHex: StateFlow<Long> = _subscribeGlassTintHex.asStateFlow()
+
+    private val _subscribeTransparency = MutableStateFlow(prefs.getFloat("sub_transparency", 0.85f))
+    val subscribeTransparency: StateFlow<Float> = _subscribeTransparency.asStateFlow()
+
+    private val _subscribeCornerRadius = MutableStateFlow(prefs.getFloat("sub_corner_radius", 18f))
+    val subscribeCornerRadius: StateFlow<Float> = _subscribeCornerRadius.asStateFlow()
+
+    private val _subscribeDepth = MutableStateFlow(prefs.getBoolean("sub_depth", true))
+    val subscribeDepth: StateFlow<Boolean> = _subscribeDepth.asStateFlow()
+
+    private val _subscribeRefraction = MutableStateFlow(prefs.getFloat("sub_refraction", 0.65f))
+    val subscribeRefraction: StateFlow<Float> = _subscribeRefraction.asStateFlow()
+
+    private val _subscribeEdgeHighlight = MutableStateFlow(prefs.getFloat("sub_edge_highlight", 0.75f))
+    val subscribeEdgeHighlight: StateFlow<Float> = _subscribeEdgeHighlight.asStateFlow()
+
+    // Neon Lights system
+    private val _neonLightsMaster = MutableStateFlow(prefs.getBoolean("neon_master_enabled", false))
+    val neonLightsMaster: StateFlow<Boolean> = _neonLightsMaster.asStateFlow()
+
+    private val _neonColorHex = MutableStateFlow(prefs.getLong("neon_color_hex", 0xFF00E5FFL)) // Electric Cyan
+    val neonColorHex: StateFlow<Long> = _neonColorHex.asStateFlow()
+
+    private val _neonIntensity = MutableStateFlow(prefs.getFloat("neon_intensity", 0.85f))
+    val neonIntensity: StateFlow<Float> = _neonIntensity.asStateFlow()
+
+    private val _neonAnimated = MutableStateFlow(prefs.getBoolean("neon_animated", false))
+    val neonAnimated: StateFlow<Boolean> = _neonAnimated.asStateFlow()
+
+    private val _neonAnimationSpeed = MutableStateFlow(prefs.getFloat("neon_speed", 1.0f))
+    val neonAnimationSpeed: StateFlow<Float> = _neonAnimationSpeed.asStateFlow()
+
+    // Layout custom visibility & icon arrangement
+    private val _showHomeTopShorts = MutableStateFlow(prefs.getBoolean("layout_show_home_shorts", true))
+    val showHomeTopShorts: StateFlow<Boolean> = _showHomeTopShorts.asStateFlow()
+
+    private val _showShortsActionRemix = MutableStateFlow(prefs.getBoolean("layout_shorts_remix", true))
+    val showShortsActionRemix: StateFlow<Boolean> = _showShortsActionRemix.asStateFlow()
+
+    private val _showShortsActionSave = MutableStateFlow(prefs.getBoolean("layout_shorts_save", true))
+    val showShortsActionSave: StateFlow<Boolean> = _showShortsActionSave.asStateFlow()
+
+    private val _playerControlsSize = MutableStateFlow(prefs.getFloat("layout_player_controls_size", 1.0f)) // 0.8 .. 1.4 scale
+    val playerControlsSize: StateFlow<Float> = _playerControlsSize.asStateFlow()
+
+    private val _iconStyleMode = MutableStateFlow(prefs.getString("layout_icon_style", "Glass") ?: "Glass") // Glass, Glow, Standard
+    val iconStyleMode: StateFlow<String> = _iconStyleMode.asStateFlow()
+
+    fun setLiquidGlassMaster(enabled: Boolean) {
+        _liquidGlassMaster.value = enabled
+        prefs.edit().putBoolean("lg_master_enabled", enabled).apply()
+        if (enabled && !_uiTheme.value.contains("Liquid Glass")) {
+            setUiTheme("Liquid Glass with Reflection")
+        } else if (!enabled && _uiTheme.value.contains("Liquid Glass")) {
+            setUiTheme("Dark Mode")
+        }
+    }
+
+    fun setLiquidGlassIntensity(v: Float) {
+        _liquidGlassIntensity.value = v
+        prefs.edit().putFloat("lg_intensity", v).apply()
+    }
+
+    fun setLiquidGlassBlur(v: Float) {
+        _liquidGlassBlur.value = v
+        prefs.edit().putFloat("lg_blur", v).apply()
+    }
+
+    fun setLiquidGlassTransparency(v: Float) {
+        _liquidGlassTransparency.value = v
+        prefs.edit().putFloat("lg_transparency", v).apply()
+    }
+
+    fun setLiquidGlassRefraction(v: Float) {
+        _liquidGlassRefraction.value = v
+        prefs.edit().putFloat("lg_refraction", v).apply()
+    }
+
+    fun setLiquidGlassSpecular(v: Boolean) {
+        _liquidGlassSpecular.value = v
+        prefs.edit().putBoolean("lg_specular", v).apply()
+    }
+
+    fun setLiquidGlassBorderThickness(v: Float) {
+        _liquidGlassBorderThickness.value = v
+        prefs.edit().putFloat("lg_border_thickness", v).apply()
+    }
+
+    fun setLiquidGlassCornerRadius(v: Float) {
+        _liquidGlassCornerRadius.value = v
+        prefs.edit().putFloat("lg_corner_radius", v).apply()
+    }
+
+    fun setLiquidGlassRefractionHeight(v: Float) {
+        _liquidGlassRefractionHeight.value = v
+        prefs.edit().putFloat("lg_refraction_height", v).apply()
+    }
+
+    fun setLiquidGlassLayerRefraction(v: Boolean) {
+        _liquidGlassLayerRefraction.value = v
+        prefs.edit().putBoolean("lg_layer_refraction", v).apply()
+    }
+
+    fun setLiquidGlassDepthEnabled(v: Boolean) {
+        _liquidGlassDepthEnabled.value = v
+        prefs.edit().putBoolean("lg_depth_enabled", v).apply()
+    }
+
+    fun setLiquidGlassVibrancy(v: Float) {
+        _liquidGlassVibrancy.value = v
+        prefs.edit().putFloat("lg_vibrancy", v).apply()
+    }
+
+    fun setLiquidGlassEdgeHighlights(v: Float) {
+        _liquidGlassEdgeHighlights.value = v
+        prefs.edit().putFloat("lg_edge_highlights", v).apply()
+    }
+
+    fun setLiquidGlassReflection(v: Float) {
+        _liquidGlassReflection.value = v
+        prefs.edit().putFloat("lg_reflection", v).apply()
+    }
+
+    fun setLiquidGlassTintColorHex(colorLong: Long) {
+        _liquidGlassTintColorHex.value = colorLong
+        prefs.edit().putLong("lg_tint_color_hex", colorLong).apply()
+    }
+
+    fun setLiquidGlassShadowElevation(v: Float) {
+        _liquidGlassShadowElevation.value = v
+        prefs.edit().putFloat("lg_shadow_elevation", v).apply()
+    }
+
+    fun setLiquidGlassAnimationIntensity(v: Float) {
+        _liquidGlassAnimationIntensity.value = v
+        prefs.edit().putFloat("lg_anim_intensity", v).apply()
+    }
+
+    fun setLiquidGlassPerformanceMode(mode: String) {
+        _liquidGlassPerformanceMode.value = mode
+        prefs.edit().putString("lg_perf_mode", mode).apply()
+    }
+
+    fun setOpticalTiltStrength(v: Float) {
+        _opticalTiltStrength.value = v
+        prefs.edit().putFloat("optical_tilt_strength", v).apply()
+    }
+
+    fun setAnimationSmoothnessMode(mode: String) {
+        _animationSmoothnessMode.value = mode
+        prefs.edit().putString("animation_smoothness_mode", mode).apply()
+    }
+
+    fun setSubscribeGlassEnabled(v: Boolean) {
+        _subscribeGlassEnabled.value = v
+        prefs.edit().putBoolean("sub_glass_enabled", v).apply()
+    }
+
+    fun setSubscribeGlassTintHex(v: Long) {
+        _subscribeGlassTintHex.value = v
+        prefs.edit().putLong("sub_glass_tint_hex", v).apply()
+    }
+
+    fun setSubscribeTransparency(v: Float) {
+        _subscribeTransparency.value = v
+        prefs.edit().putFloat("sub_transparency", v).apply()
+    }
+
+    fun setSubscribeCornerRadius(v: Float) {
+        _subscribeCornerRadius.value = v
+        prefs.edit().putFloat("sub_corner_radius", v).apply()
+    }
+
+    fun setSubscribeDepth(v: Boolean) {
+        _subscribeDepth.value = v
+        prefs.edit().putBoolean("sub_depth", v).apply()
+    }
+
+    fun setSubscribeRefraction(v: Float) {
+        _subscribeRefraction.value = v
+        prefs.edit().putFloat("sub_refraction", v).apply()
+    }
+
+    fun setSubscribeEdgeHighlight(v: Float) {
+        _subscribeEdgeHighlight.value = v
+        prefs.edit().putFloat("sub_edge_highlight", v).apply()
+    }
+
+    fun setLiquidGlassLightAngle(degrees: Float) {
+        _liquidGlassLightAngle.value = degrees
+        prefs.edit().putFloat("lg_light_angle", degrees).apply()
+    }
+
+    fun setLiquidGlassDropReflectionEnabled(enabled: Boolean) {
+        _liquidGlassDropReflectionEnabled.value = enabled
+        prefs.edit().putBoolean("lg_drop_refl_enabled", enabled).apply()
+    }
+
+    fun setLiquidGlassDropReflectionSize(v: Float) {
+        _liquidGlassDropReflectionSize.value = v
+        prefs.edit().putFloat("lg_drop_refl_size", v).apply()
+    }
+
+    fun setLiquidGlassDropReflectionIntensity(v: Float) {
+        _liquidGlassDropReflectionIntensity.value = v
+        prefs.edit().putFloat("lg_drop_refl_intensity", v).apply()
+    }
+
+    fun setLiquidGlassDropReflectionX(v: Float) {
+        _liquidGlassDropReflectionX.value = v
+        prefs.edit().putFloat("lg_drop_refl_x", v).apply()
+    }
+
+    fun setLiquidGlassDropReflectionY(v: Float) {
+        _liquidGlassDropReflectionY.value = v
+        prefs.edit().putFloat("lg_drop_refl_y", v).apply()
+    }
+
+    fun setLiquidGlassDropReflectionSoftness(v: Float) {
+        _liquidGlassDropReflectionSoftness.value = v
+        prefs.edit().putFloat("lg_drop_refl_softness", v).apply()
+    }
+
+    fun setLiquidGlassDropSecondaryHighlight(v: Float) {
+        _liquidGlassDropSecondaryHighlight.value = v
+        prefs.edit().putFloat("lg_drop_sec_highlight", v).apply()
+    }
+
+    fun setLiquidGlassConvexCurvature(v: Float) {
+        _liquidGlassConvexCurvature.value = v
+        prefs.edit().putFloat("lg_convex_curvature", v).apply()
+    }
+
+    fun setLiquidGlassBevelStrength(v: Float) {
+        _liquidGlassBevelStrength.value = v
+        prefs.edit().putFloat("lg_bevel_strength", v).apply()
+    }
+
+    fun setLiquidGlassDepthIntensity(v: Float) {
+        _liquidGlassDepthIntensity.value = v
+        prefs.edit().putFloat("lg_depth_intensity", v).apply()
+    }
+
+    fun setLiquidGlassSmoothness(v: Float) {
+        _liquidGlassSmoothness.value = v
+        prefs.edit().putFloat("lg_glass_smoothness", v).apply()
+    }
+
+    fun resetLiquidGlassDefaults() {
+        setLiquidGlassMaster(true)
+        setLiquidGlassTransparency(0.70f)
+        setLiquidGlassBlur(24f)
+        setLiquidGlassCornerRadius(16f)
+        setLiquidGlassRefractionHeight(0.65f)
+        setLiquidGlassRefraction(0.65f)
+        setLiquidGlassLayerRefraction(true)
+        setLiquidGlassDepthEnabled(true)
+        setLiquidGlassVibrancy(0.85f)
+        setLiquidGlassEdgeHighlights(0.80f)
+        setLiquidGlassBorderThickness(1.0f)
+        setLiquidGlassReflection(0.75f)
+        setLiquidGlassTintColorHex(0x35141928L)
+        setLiquidGlassShadowElevation(6f)
+        setLiquidGlassAnimationIntensity(1.0f)
+        setLiquidGlassPerformanceMode("Quality")
+        setLiquidGlassLightAngle(315f)
+        setLiquidGlassDropReflectionEnabled(false)
+        setOpticalTiltStrength(0.85f)
+        setAnimationSmoothnessMode("Silky Smooth")
+        setLiquidGlassDropReflectionSize(0.55f)
+        setLiquidGlassDropReflectionIntensity(0.75f)
+        setLiquidGlassDropReflectionX(0.50f)
+        setLiquidGlassDropReflectionY(0.35f)
+        setLiquidGlassDropReflectionSoftness(0.65f)
+        setLiquidGlassDropSecondaryHighlight(0.45f)
+        setLiquidGlassConvexCurvature(0.70f)
+        setLiquidGlassBevelStrength(0.80f)
+        setLiquidGlassDepthIntensity(0.75f)
+        setLiquidGlassSmoothness(0.85f)
+        setSubscribeGlassEnabled(true)
+        setSubscribeGlassTintHex(0xFFFFFFFFL)
+        setSubscribeTransparency(0.85f)
+        setSubscribeCornerRadius(18f)
+        setSubscribeDepth(true)
+        setSubscribeRefraction(0.65f)
+        setSubscribeEdgeHighlight(0.75f)
+    }
+
+    fun setNeonLightsMaster(enabled: Boolean) {
+        _neonLightsMaster.value = enabled
+        prefs.edit().putBoolean("neon_master_enabled", enabled).apply()
+    }
+
+    fun setNeonColorHex(colorLong: Long) {
+        _neonColorHex.value = colorLong
+        prefs.edit().putLong("neon_color_hex", colorLong).apply()
+    }
+
+    fun setNeonIntensity(v: Float) {
+        _neonIntensity.value = v
+        prefs.edit().putFloat("neon_intensity", v).apply()
+    }
+
+    fun setNeonAnimated(v: Boolean) {
+        _neonAnimated.value = v
+        prefs.edit().putBoolean("neon_animated", v).apply()
+    }
+
+    fun setNeonAnimationSpeed(v: Float) {
+        _neonAnimationSpeed.value = v
+        prefs.edit().putFloat("neon_speed", v).apply()
+    }
+
+    fun setShowHomeTopShorts(v: Boolean) {
+        _showHomeTopShorts.value = v
+        prefs.edit().putBoolean("layout_show_home_shorts", v).apply()
+    }
+
+    fun setShowShortsActionRemix(v: Boolean) {
+        _showShortsActionRemix.value = v
+        prefs.edit().putBoolean("layout_shorts_remix", v).apply()
+    }
+
+    fun setShowShortsActionSave(v: Boolean) {
+        _showShortsActionSave.value = v
+        prefs.edit().putBoolean("layout_shorts_save", v).apply()
+    }
+
+    fun setPlayerControlsSize(scale: Float) {
+        _playerControlsSize.value = scale
+        prefs.edit().putFloat("layout_player_controls_size", scale).apply()
+    }
+
+    fun setIconStyleMode(mode: String) {
+        _iconStyleMode.value = mode
+        prefs.edit().putString("layout_icon_style", mode).apply()
+    }
+
+    // -------------------------------------------------------------
+    // ADVANCED UI CUSTOMIZATION ENGINE (A-Z Interface Customization)
+    // -------------------------------------------------------------
+
+    // A. Home Feed Customization
+    private val _homeCardCornerRadius = MutableStateFlow(prefs.getFloat("home_card_corner_radius", 14f))
+    val homeCardCornerRadius: StateFlow<Float> = _homeCardCornerRadius.asStateFlow()
+
+    private val _homeCardSpacing = MutableStateFlow(prefs.getFloat("home_card_spacing", 12f))
+    val homeCardSpacing: StateFlow<Float> = _homeCardSpacing.asStateFlow()
+
+    private val _homeCardPadding = MutableStateFlow(prefs.getFloat("home_card_padding", 8f))
+    val homeCardPadding: StateFlow<Float> = _homeCardPadding.asStateFlow()
+
+    private val _homeGlassCards = MutableStateFlow(prefs.getBoolean("home_glass_cards", false))
+    val homeGlassCards: StateFlow<Boolean> = _homeGlassCards.asStateFlow()
+
+    // B. Shorts Screen Customization
+    private val _shortsActionButtonStyle = MutableStateFlow(prefs.getString("shorts_action_btn_style", "Glass Pill") ?: "Glass Pill")
+    val shortsActionButtonStyle: StateFlow<String> = _shortsActionButtonStyle.asStateFlow()
+
+    private val _shortsActionIconScale = MutableStateFlow(prefs.getFloat("shorts_action_icon_scale", 1.0f))
+    val shortsActionIconScale: StateFlow<Float> = _shortsActionIconScale.asStateFlow()
+
+    private val _shortsOverlayAlpha = MutableStateFlow(prefs.getFloat("shorts_overlay_alpha", 0.85f))
+    val shortsOverlayAlpha: StateFlow<Float> = _shortsOverlayAlpha.asStateFlow()
+
+    // Shorts Feed Grid (2, 4, 6, 8 Shorts per feed section)
+    private val _shortsFeedGridCount = MutableStateFlow(prefs.getInt("shorts_feed_grid_count", 4))
+    val shortsFeedGridCount: StateFlow<Int> = _shortsFeedGridCount.asStateFlow()
+
+    // C. Shorts & Bottom Navigation Customization
+    private val _navBarHeightDp = MutableStateFlow(prefs.getFloat("nav_bar_height_dp", 54f))
+    val navBarHeightDp: StateFlow<Float> = _navBarHeightDp.asStateFlow()
+
+    private val _navBarGlassEnabled = MutableStateFlow(prefs.getBoolean("nav_bar_glass_enabled", true))
+    val navBarGlassEnabled: StateFlow<Boolean> = _navBarGlassEnabled.asStateFlow()
+
+    private val _navBarIndicatorStyle = MutableStateFlow(prefs.getString("nav_bar_indicator_style", "Liquid Glass Pill") ?: "Liquid Glass Pill")
+    val navBarIndicatorStyle: StateFlow<String> = _navBarIndicatorStyle.asStateFlow()
+
+    private val _navBarShowLabels = MutableStateFlow(prefs.getBoolean("nav_bar_show_labels", true))
+    val navBarShowLabels: StateFlow<Boolean> = _navBarShowLabels.asStateFlow()
+
+    // D. Profile UI Customization
+    private val _profileHeaderGlassStyle = MutableStateFlow(prefs.getString("profile_header_glass_style", "Liquid Glass Card") ?: "Liquid Glass Card")
+    val profileHeaderGlassStyle: StateFlow<String> = _profileHeaderGlassStyle.asStateFlow()
+
+    private val _profileAvatarCornerRadius = MutableStateFlow(prefs.getFloat("profile_avatar_corner_radius", 50f))
+    val profileAvatarCornerRadius: StateFlow<Float> = _profileAvatarCornerRadius.asStateFlow()
+
+    private val _profileActionButtonsGlass = MutableStateFlow(prefs.getBoolean("profile_action_buttons_glass", true))
+    val profileActionButtonsGlass: StateFlow<Boolean> = _profileActionButtonsGlass.asStateFlow()
+
+    // E. Notification UI Customization
+    private val _notificationCardCornerRadius = MutableStateFlow(prefs.getFloat("notif_card_corner_radius", 14f))
+    val notificationCardCornerRadius: StateFlow<Float> = _notificationCardCornerRadius.asStateFlow()
+
+    private val _notificationGlassCards = MutableStateFlow(prefs.getBoolean("notif_glass_cards", true))
+    val notificationGlassCards: StateFlow<Boolean> = _notificationGlassCards.asStateFlow()
+
+    private val _notificationCardSpacing = MutableStateFlow(prefs.getFloat("notif_card_spacing", 8f))
+    val notificationCardSpacing: StateFlow<Float> = _notificationCardSpacing.asStateFlow()
+
+    // F. Optical GPU Shader & Real-Time Refraction
+    private val _opticalShaderEnabled = MutableStateFlow(prefs.getBoolean("optical_shader_enabled", true))
+    val opticalShaderEnabled: StateFlow<Boolean> = _opticalShaderEnabled.asStateFlow()
+
+    private val _opticalCurvaturePower = MutableStateFlow(prefs.getFloat("optical_curvature_power", 2.5f))
+    val opticalCurvaturePower: StateFlow<Float> = _opticalCurvaturePower.asStateFlow()
+
+    private val _opticalChromaticDispersion = MutableStateFlow(prefs.getFloat("optical_chromatic_dispersion", 0.45f))
+    val opticalChromaticDispersion: StateFlow<Float> = _opticalChromaticDispersion.asStateFlow()
+
+    private val _springPhysicsEnabled = MutableStateFlow(prefs.getBoolean("spring_physics_enabled", true))
+    val springPhysicsEnabled: StateFlow<Boolean> = _springPhysicsEnabled.asStateFlow()
+
+    // Setters for UI Customization
+    fun setHomeCardCornerRadius(v: Float) {
+        _homeCardCornerRadius.value = v
+        prefs.edit().putFloat("home_card_corner_radius", v).apply()
+    }
+
+    fun setHomeCardSpacing(v: Float) {
+        _homeCardSpacing.value = v
+        prefs.edit().putFloat("home_card_spacing", v).apply()
+    }
+
+    fun setHomeCardPadding(v: Float) {
+        _homeCardPadding.value = v
+        prefs.edit().putFloat("home_card_padding", v).apply()
+    }
+
+    fun setHomeGlassCards(v: Boolean) {
+        _homeGlassCards.value = v
+        prefs.edit().putBoolean("home_glass_cards", v).apply()
+    }
+
+    fun setShortsActionButtonStyle(v: String) {
+        _shortsActionButtonStyle.value = v
+        prefs.edit().putString("shorts_action_btn_style", v).apply()
+    }
+
+    fun setShortsActionIconScale(v: Float) {
+        _shortsActionIconScale.value = v
+        prefs.edit().putFloat("shorts_action_icon_scale", v).apply()
+    }
+
+    fun setShortsOverlayAlpha(v: Float) {
+        _shortsOverlayAlpha.value = v
+        prefs.edit().putFloat("shorts_overlay_alpha", v).apply()
+    }
+
+    fun setShortsFeedGridCount(count: Int) {
+        val validCount = if (count in listOf(2, 4, 6, 8)) count else 4
+        _shortsFeedGridCount.value = validCount
+        prefs.edit().putInt("shorts_feed_grid_count", validCount).apply()
+    }
+
+    fun setNavBarHeightDp(v: Float) {
+        _navBarHeightDp.value = v
+        prefs.edit().putFloat("nav_bar_height_dp", v).apply()
+    }
+
+    fun setNavBarGlassEnabled(v: Boolean) {
+        _navBarGlassEnabled.value = v
+        prefs.edit().putBoolean("nav_bar_glass_enabled", v).apply()
+    }
+
+    fun setNavBarIndicatorStyle(v: String) {
+        _navBarIndicatorStyle.value = v
+        prefs.edit().putString("nav_bar_indicator_style", v).apply()
+    }
+
+    fun setNavBarShowLabels(v: Boolean) {
+        _navBarShowLabels.value = v
+        prefs.edit().putBoolean("nav_bar_show_labels", v).apply()
+    }
+
+    fun setProfileHeaderGlassStyle(v: String) {
+        _profileHeaderGlassStyle.value = v
+        prefs.edit().putString("profile_header_glass_style", v).apply()
+    }
+
+    fun setProfileAvatarCornerRadius(v: Float) {
+        _profileAvatarCornerRadius.value = v
+        prefs.edit().putFloat("profile_avatar_corner_radius", v).apply()
+    }
+
+    fun setProfileActionButtonsGlass(v: Boolean) {
+        _profileActionButtonsGlass.value = v
+        prefs.edit().putBoolean("profile_action_buttons_glass", v).apply()
+    }
+
+    fun setNotificationCardCornerRadius(v: Float) {
+        _notificationCardCornerRadius.value = v
+        prefs.edit().putFloat("notif_card_corner_radius", v).apply()
+    }
+
+    fun setNotificationGlassCards(v: Boolean) {
+        _notificationGlassCards.value = v
+        prefs.edit().putBoolean("notif_glass_cards", v).apply()
+    }
+
+    fun setNotificationCardSpacing(v: Float) {
+        _notificationCardSpacing.value = v
+        prefs.edit().putFloat("notif_card_spacing", v).apply()
+    }
+
+    fun setOpticalShaderEnabled(v: Boolean) {
+        _opticalShaderEnabled.value = v
+        prefs.edit().putBoolean("optical_shader_enabled", v).apply()
+    }
+
+    fun setOpticalCurvaturePower(v: Float) {
+        _opticalCurvaturePower.value = v
+        prefs.edit().putFloat("optical_curvature_power", v).apply()
+    }
+
+    fun setOpticalChromaticDispersion(v: Float) {
+        _opticalChromaticDispersion.value = v
+        prefs.edit().putFloat("optical_chromatic_dispersion", v).apply()
+    }
+
+    fun setSpringPhysicsEnabled(v: Boolean) {
+        _springPhysicsEnabled.value = v
+        prefs.edit().putBoolean("spring_physics_enabled", v).apply()
+    }
+
+    // Customizable Shorts Action Icons (Positions, Visibility, Drag-and-Drop persistence)
+    private fun loadShortsActions(): List<ShortsActionConfig> {
+        val savedSet = prefs.getStringSet("shorts_action_configs_v2", null)
+        if (savedSet.isNullOrEmpty()) {
+            return ShortsActionDefaults.getDefaultActions()
+        }
+        val loaded = savedSet.mapNotNull { ShortsActionConfig.fromSerialized(it) }
+        val defaults = ShortsActionDefaults.getDefaultActions()
+        return defaults.map { def ->
+            loaded.find { it.id == def.id } ?: def
+        }
+    }
+
+    private val _shortsActionConfigs = MutableStateFlow<List<ShortsActionConfig>>(loadShortsActions())
+    val shortsActionConfigs: StateFlow<List<ShortsActionConfig>> = _shortsActionConfigs.asStateFlow()
+
+    fun saveShortsActionConfigs(configs: List<ShortsActionConfig>) {
+        _shortsActionConfigs.value = configs
+        val set = configs.map { it.toSerialized() }.toSet()
+        prefs.edit().putStringSet("shorts_action_configs_v2", set).apply()
+    }
+
+    fun updateShortsActionPosition(id: String, xRatio: Float, yRatio: Float) {
+        val current = _shortsActionConfigs.value.toMutableList()
+        val idx = current.indexOfFirst { it.id == id }
+        if (idx != -1) {
+            val old = current[idx]
+            current[idx] = old.copy(
+                xRatio = xRatio.coerceIn(0.04f, 0.94f),
+                yRatio = yRatio.coerceIn(0.04f, 0.95f)
+            )
+            saveShortsActionConfigs(current)
+        }
+    }
+
+    fun setShortsActionVisible(id: String, isVisible: Boolean) {
+        val current = _shortsActionConfigs.value.toMutableList()
+        val idx = current.indexOfFirst { it.id == id }
+        if (idx != -1) {
+            val old = current[idx]
+            if (!isVisible && old.isProtected) return
+            current[idx] = old.copy(isVisible = isVisible)
+            saveShortsActionConfigs(current)
+        }
+    }
+
+    fun resetShortsActionConfigs() {
+        saveShortsActionConfigs(ShortsActionDefaults.getDefaultActions())
+    }
+
+    // Shorts Double-Tap Like Animation Mode: "Heart" vs "Thumb"
+    private val _shortsDoubleTapMode = MutableStateFlow(prefs.getString("shorts_double_tap_mode", "Heart") ?: "Heart")
+    val shortsDoubleTapMode: StateFlow<String> = _shortsDoubleTapMode.asStateFlow()
+
+    fun setShortsDoubleTapMode(mode: String) {
+        val safeMode = if (mode.equals("Thumb", ignoreCase = true)) "Thumb" else "Heart"
+        _shortsDoubleTapMode.value = safeMode
+        prefs.edit().putString("shorts_double_tap_mode", safeMode).apply()
+    }
+
+    // Custom Button Artworks mapping: elementId -> local saved image path or URI
+    private fun loadCustomArtworks(): Map<String, String> {
+        val saved = prefs.getStringSet("custom_button_artworks_v1", null) ?: return emptyMap()
+        val map = mutableMapOf<String, String>()
+        for (entry in saved) {
+            val idx = entry.indexOf("=")
+            if (idx > 0 && idx < entry.length - 1) {
+                map[entry.substring(0, idx)] = entry.substring(idx + 1)
+            }
+        }
+        return map
+    }
+
+    private val _customButtonArtworks = MutableStateFlow<Map<String, String>>(loadCustomArtworks())
+    val customButtonArtworks: StateFlow<Map<String, String>> = _customButtonArtworks.asStateFlow()
+
+    fun setCustomButtonArtwork(elementId: String, pathOrUri: String?) {
+        val updated = _customButtonArtworks.value.toMutableMap()
+        if (pathOrUri.isNullOrBlank()) {
+            updated.remove(elementId)
+        } else {
+            updated[elementId] = pathOrUri
+        }
+        _customButtonArtworks.value = updated
+        val set = updated.map { "${it.key}=${it.value}" }.toSet()
+        prefs.edit().putStringSet("custom_button_artworks_v1", set).apply()
+
+        // Also reflect in AppElementConfigs
+        val current = _appElementConfigs.value.toMutableList()
+        val idx = current.indexOfFirst { it.id == elementId }
+        if (idx != -1) {
+            val old = current[idx]
+            current[idx] = old.copy(customArtworkPath = pathOrUri)
+            saveAppElementConfigs(current)
+        }
+    }
+
+    fun removeCustomButtonArtwork(elementId: String) {
+        setCustomButtonArtwork(elementId, null)
+    }
+
+    // Universal App Element Customization (Home, Shorts, Player, Profile, Subscriptions, Search, Notifications, Navigation)
+    private fun loadAppElements(): List<AppElementConfig> {
+        val savedSet = prefs.getStringSet("app_element_configs_v1", null)
+        val defaults = AppElementCatalog.getAllDefaultElements()
+        if (savedSet.isNullOrEmpty()) {
+            return defaults
+        }
+        val loaded = savedSet.mapNotNull { AppElementConfig.fromSerialized(it) }
+        val loadedMap = loaded.associateBy { it.id }
+        return defaults.map { def ->
+            loadedMap[def.id]?.let { saved ->
+                def.copy(
+                    isVisible = saved.isVisible,
+                    xRatio = saved.xRatio,
+                    yRatio = saved.yRatio,
+                    scale = saved.scale,
+                    customArtworkPath = saved.customArtworkPath
+                )
+            } ?: def
+        }
+    }
+
+    private val _appElementConfigs = MutableStateFlow<List<AppElementConfig>>(loadAppElements())
+    val appElementConfigs: StateFlow<List<AppElementConfig>> = _appElementConfigs.asStateFlow()
+
+    fun saveAppElementConfigs(configs: List<AppElementConfig>) {
+        _appElementConfigs.value = configs
+        val set = configs.map { it.toSerialized() }.toSet()
+        prefs.edit().putStringSet("app_element_configs_v1", set).apply()
+    }
+
+    fun updateAppElementPosition(id: String, xRatio: Float, yRatio: Float) {
+        val current = _appElementConfigs.value.toMutableList()
+        val idx = current.indexOfFirst { it.id == id }
+        if (idx != -1) {
+            val old = current[idx]
+            current[idx] = old.copy(
+                xRatio = xRatio.coerceIn(0.02f, 0.98f),
+                yRatio = yRatio.coerceIn(0.02f, 0.98f)
+            )
+            saveAppElementConfigs(current)
+        }
+    }
+
+    fun setAppElementVisible(id: String, isVisible: Boolean) {
+        val current = _appElementConfigs.value.toMutableList()
+        val idx = current.indexOfFirst { it.id == id }
+        if (idx != -1) {
+            val old = current[idx]
+            if (!isVisible && old.isProtected) return
+            current[idx] = old.copy(isVisible = isVisible)
+            saveAppElementConfigs(current)
+        }
+    }
+
+    fun setAppElementScale(id: String, scale: Float) {
+        val current = _appElementConfigs.value.toMutableList()
+        val idx = current.indexOfFirst { it.id == id }
+        if (idx != -1) {
+            val old = current[idx]
+            current[idx] = old.copy(scale = scale.coerceIn(0.5f, 2.5f))
+            saveAppElementConfigs(current)
+        }
+    }
+
+    fun resetAppElementConfigs() {
+        val defaults = AppElementCatalog.getAllDefaultElements()
+        saveAppElementConfigs(defaults)
+        _customButtonArtworks.value = emptyMap()
+        prefs.edit().remove("custom_button_artworks_v1").apply()
+    }
+
+    // Search Screen Background & Liquid Glass Customization
+    private val _searchBackgroundType = MutableStateFlow(prefs.getString("search_bg_type", "Default Dark") ?: "Default Dark")
+    val searchBackgroundType: StateFlow<String> = _searchBackgroundType.asStateFlow()
+
+    private val _searchBackgroundCustomColorHex = MutableStateFlow(prefs.getLong("search_bg_color_hex", 0xFF141928L))
+    val searchBackgroundCustomColorHex: StateFlow<Long> = _searchBackgroundCustomColorHex.asStateFlow()
+
+    private val _searchGlassTransparency = MutableStateFlow(prefs.getFloat("search_glass_transparency", 0.70f))
+    val searchGlassTransparency: StateFlow<Float> = _searchGlassTransparency.asStateFlow()
+
+    private val _searchGlassRefraction = MutableStateFlow(prefs.getFloat("search_glass_refraction", 0.65f))
+    val searchGlassRefraction: StateFlow<Float> = _searchGlassRefraction.asStateFlow()
+
+    private val _searchGlassHighlights = MutableStateFlow(prefs.getFloat("search_glass_highlights", 0.80f))
+    val searchGlassHighlights: StateFlow<Float> = _searchGlassHighlights.asStateFlow()
+
+    fun setSearchBackgroundType(type: String) {
+        _searchBackgroundType.value = type
+        prefs.edit().putString("search_bg_type", type).apply()
+    }
+
+    fun setSearchBackgroundCustomColorHex(hex: Long) {
+        _searchBackgroundCustomColorHex.value = hex
+        prefs.edit().putLong("search_bg_color_hex", hex).apply()
+    }
+
+    fun setSearchGlassTransparency(value: Float) {
+        _searchGlassTransparency.value = value
+        prefs.edit().putFloat("search_glass_transparency", value).apply()
+    }
+
+    fun setSearchGlassRefraction(value: Float) {
+        _searchGlassRefraction.value = value
+        prefs.edit().putFloat("search_glass_refraction", value).apply()
+    }
+
+    fun setSearchGlassHighlights(value: Float) {
+        _searchGlassHighlights.value = value
+        prefs.edit().putFloat("search_glass_highlights", value).apply()
+    }
+
+    // Subscriptions Screen Background & Liquid Glass Customization
+    private val _subscriptionsBackgroundType = MutableStateFlow(prefs.getString("sub_bg_type", "Default Dark") ?: "Default Dark")
+    val subscriptionsBackgroundType: StateFlow<String> = _subscriptionsBackgroundType.asStateFlow()
+
+    private val _subscriptionsBackgroundCustomColorHex = MutableStateFlow(prefs.getLong("sub_bg_color_hex", 0xFF181024L))
+    val subscriptionsBackgroundCustomColorHex: StateFlow<Long> = _subscriptionsBackgroundCustomColorHex.asStateFlow()
+
+    private val _subscriptionsGlassTransparency = MutableStateFlow(prefs.getFloat("sub_glass_transparency", 0.70f))
+    val subscriptionsGlassTransparency: StateFlow<Float> = _subscriptionsGlassTransparency.asStateFlow()
+
+    private val _subscriptionsGlassRefraction = MutableStateFlow(prefs.getFloat("sub_glass_refraction", 0.65f))
+    val subscriptionsGlassRefraction: StateFlow<Float> = _subscriptionsGlassRefraction.asStateFlow()
+
+    private val _subscriptionsGlassHighlights = MutableStateFlow(prefs.getFloat("sub_glass_highlights", 0.80f))
+    val subscriptionsGlassHighlights: StateFlow<Float> = _subscriptionsGlassHighlights.asStateFlow()
+
+    fun setSubscriptionsBackgroundType(type: String) {
+        _subscriptionsBackgroundType.value = type
+        prefs.edit().putString("sub_bg_type", type).apply()
+    }
+
+    fun setSubscriptionsBackgroundCustomColorHex(hex: Long) {
+        _subscriptionsBackgroundCustomColorHex.value = hex
+        prefs.edit().putLong("sub_bg_color_hex", hex).apply()
+    }
+
+    fun setSubscriptionsGlassTransparency(value: Float) {
+        _subscriptionsGlassTransparency.value = value
+        prefs.edit().putFloat("sub_glass_transparency", value).apply()
+    }
+
+    fun setSubscriptionsGlassRefraction(value: Float) {
+        _subscriptionsGlassRefraction.value = value
+        prefs.edit().putFloat("sub_glass_refraction", value).apply()
+    }
+
+    fun setSubscriptionsGlassHighlights(value: Float) {
+        _subscriptionsGlassHighlights.value = value
+        prefs.edit().putFloat("sub_glass_highlights", value).apply()
+    }
+
+    fun resetAllAppearance() {
+        setLiquidGlassMaster(true)
+        setLiquidGlassIntensity(0.85f)
+        setLiquidGlassBlur(24f)
+        setLiquidGlassTransparency(0.70f)
+        setLiquidGlassRefraction(0.65f)
+        setLiquidGlassSpecular(true)
+        setLiquidGlassBorderThickness(1.0f)
+        setNeonLightsMaster(false)
+        setNeonColorHex(0xFF00E5FFL)
+        setNeonIntensity(0.85f)
+        setNeonAnimated(false)
+        setNeonAnimationSpeed(1.0f)
+        setCustomAccentColorHex(0xFFFF0033L)
+        setCustomBackgroundUri(null)
+        setCustomBackgroundDim(0.75f)
+        setUiTheme("Liquid Glass with Reflection")
+        setShowHomeTopShorts(true)
+        setShowShortsActionRemix(true)
+        setShowShortsActionSave(true)
+        setPlayerControlsSize(1.0f)
+        setIconStyleMode("Glass")
+        setHomeCardCornerRadius(14f)
+        setHomeCardSpacing(12f)
+        setHomeCardPadding(8f)
+        setHomeGlassCards(true)
+        setShortsActionButtonStyle("Glass Pill")
+        setShortsActionIconScale(1.0f)
+        setShortsOverlayAlpha(0.85f)
+        setNavBarHeightDp(54f)
+        setNavBarGlassEnabled(true)
+        setNavBarIndicatorStyle("Liquid Glass Pill")
+        setNavBarShowLabels(true)
+        setProfileHeaderGlassStyle("Liquid Glass Card")
+        setProfileAvatarCornerRadius(50f)
+        setProfileActionButtonsGlass(true)
+        setNotificationCardCornerRadius(14f)
+        setNotificationGlassCards(true)
+        setNotificationCardSpacing(8f)
+        setOpticalShaderEnabled(true)
+        setOpticalCurvaturePower(2.5f)
+        setOpticalChromaticDispersion(0.45f)
+        setSpringPhysicsEnabled(true)
+    }
+}

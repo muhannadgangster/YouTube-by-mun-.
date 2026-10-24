@@ -1,0 +1,1064 @@
+package com.example.ui.screens
+
+import androidx.activity.compose.BackHandler
+import android.media.MediaPlayer
+import android.net.Uri
+import android.os.Build
+import android.widget.VideoView
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.example.data.SettingsManager
+import com.example.data.model.ShortsActionConfig
+import com.example.data.model.ShortsActionIds
+import com.example.data.model.ShortsActionDefaults
+import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.layout.offset
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.LinearOutSlowInEasing
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
+import com.example.data.model.AppElementCatalog
+import java.io.File
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
+import androidx.compose.animation.togetherWith
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.unit.IntOffset
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.pager.VerticalPager
+import androidx.compose.foundation.pager.rememberPagerState
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Bookmark
+import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.Favorite
+import androidx.compose.material.icons.filled.FastForward
+import androidx.compose.material.icons.filled.MusicNote
+import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.Repeat
+import androidx.compose.material.icons.outlined.BookmarkBorder
+import androidx.compose.material.icons.outlined.ChatBubbleOutline
+import androidx.compose.material.icons.outlined.FavoriteBorder
+import androidx.compose.material.icons.outlined.Share
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.CameraAlt
+import androidx.compose.material.icons.filled.Notifications
+import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material.icons.filled.ThumbUp
+import androidx.compose.material.icons.filled.ThumbDown
+import androidx.compose.material.icons.outlined.ThumbUp
+import androidx.compose.material.icons.outlined.ThumbDown
+import androidx.compose.material3.Badge
+import androidx.compose.material3.BadgedBox
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.Icon
+import androidx.compose.material3.LinearProgressIndicator
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import com.example.ui.components.LiquidGlassSubscribeButton
+import com.example.ui.components.GlassVideoActionSheet
+import com.example.ui.components.GlassIconButton
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.rotate
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import androidx.compose.ui.viewinterop.AndroidView
+import coil.compose.AsyncImage
+import coil.request.ImageRequest
+import com.example.data.VideoItem
+import com.example.ui.components.VideoThumbnailView
+import com.example.ui.theme.YtAvatarTeal
+import com.example.ui.theme.YtRed
+import com.example.ui.theme.LocalAppAccentColor
+import com.example.ui.theme.LocalLiquidGlassConfig
+import com.example.ui.theme.liquidGlassSurface
+import com.example.util.ScalingUtils
+import com.example.util.scaled
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
+
+/**
+ * Standard YouTube Shorts Layout:
+ * - 9:16 Full-screen object-fit cover
+ * - Clean unobstructed center
+ * - Bottom-Right vertical Action Buttons: Like, Comment, Save, Share, Remix, Audio Thumbnail Card
+ * - Bottom-Left Info Section: Channel row with avatar, @handle, white Subscribe capsule pill,
+ *   compact 2-line title with edit button, hashtags, and sound ticker pill
+ * - Safe area bottom padding (74dp) to avoid overlapping the bottom navigation bar
+ */
+@Composable
+fun ShortsScreen(
+    shortsList: List<VideoItem>,
+    initialShortId: String? = null,
+    onConsumedInitialShort: (() -> Unit)? = null,
+    onToggleLike: (VideoItem) -> Unit,
+    onToggleDislike: (VideoItem) -> Unit = {},
+    onToggleSubscribe: (VideoItem) -> Unit,
+    onOpenComments: (VideoItem) -> Unit,
+    onToggleSave: (VideoItem) -> Unit = {},
+    onRemixClick: (VideoItem) -> Unit = {},
+    onEditTitle: (VideoItem) -> Unit,
+    onShare: (VideoItem) -> Unit,
+    onSearchClick: (() -> Unit)? = null,
+    onCameraClick: (() -> Unit)? = null,
+    onNotificationsClick: (() -> Unit)? = null,
+    unreadNotificationCount: Int = 0,
+    onToggleDownload: ((VideoItem) -> Unit)? = null,
+    onBackClick: (() -> Unit)? = null,
+    settingsManager: SettingsManager? = null,
+    modifier: Modifier = Modifier
+) {
+    BackHandler {
+        onBackClick?.invoke()
+    }
+
+    val actionConfigs by settingsManager?.shortsActionConfigs?.collectAsStateWithLifecycle()
+        ?: remember { mutableStateOf(ShortsActionDefaults.DEFAULT_ACTIONS) }
+    val shortsDoubleTapMode by settingsManager?.shortsDoubleTapMode?.collectAsStateWithLifecycle()
+        ?: remember { mutableStateOf("Heart") }
+    val customArtworks by settingsManager?.customButtonArtworks?.collectAsStateWithLifecycle()
+        ?: remember { mutableStateOf(emptyMap()) }
+
+    if (shortsList.isEmpty()) {
+        Box(
+            modifier = modifier
+                .fillMaxSize()
+                .background(Color.Black),
+            contentAlignment = Alignment.Center
+        ) {
+            Text("No shorts found. Tap '+' to create or scan gallery media!", color = Color.White)
+        }
+        return
+    }
+
+    val glassConfig = LocalLiquidGlassConfig.current
+    var activeSheetVideo by remember { mutableStateOf<VideoItem?>(null) }
+
+    val initialPage = remember(initialShortId) {
+        if (!initialShortId.isNullOrBlank()) {
+            val idx = shortsList.indexOfFirst { it.id == initialShortId }
+            if (idx >= 0) idx else 0
+        } else {
+            0
+        }
+    }
+
+    // Unlimited infinite scrolling for YouTube Shorts feed
+    val infinitePageCount = 1_000_000
+    val pagerState = rememberPagerState(
+        initialPage = initialPage,
+        pageCount = { infinitePageCount }
+    )
+
+    LaunchedEffect(initialShortId) {
+        if (!initialShortId.isNullOrBlank()) {
+            val idx = shortsList.indexOfFirst { it.id == initialShortId }
+            if (idx >= 0 && pagerState.currentPage % shortsList.size != idx) {
+                pagerState.scrollToPage(idx)
+            }
+            onConsumedInitialShort?.invoke()
+        }
+    }
+
+    val currentVideo = shortsList[pagerState.currentPage % shortsList.size]
+
+    Box(
+        modifier = modifier
+            .fillMaxSize()
+            .background(Color.Black)
+    ) {
+        VerticalPager(
+            state = pagerState,
+            key = { page -> "short_page_${page}_${shortsList[page % shortsList.size].id}" },
+            modifier = Modifier
+                .fillMaxSize()
+                .testTag("shorts_vertical_pager")
+        ) { page ->
+            val video = shortsList[page % shortsList.size]
+            val isCurrentPage = pagerState.currentPage == page
+
+            ShortsItemPage(
+                video = video,
+                pageIndex = page,
+                isActive = isCurrentPage,
+                actionConfigs = actionConfigs,
+                onToggleLike = { onToggleLike(video) },
+                onToggleDislike = { onToggleDislike(video) },
+                onToggleSubscribe = { onToggleSubscribe(video) },
+                onOpenComments = { onOpenComments(video) },
+                onToggleSave = { onToggleSave(video) },
+                onRemixClick = { onRemixClick(video) },
+                onEditTitle = { onEditTitle(video) },
+                onShare = { onShare(video) },
+                onOpenMenu = { activeSheetVideo = video },
+                shortsDoubleTapMode = shortsDoubleTapMode,
+                customArtworks = customArtworks
+            )
+        }
+
+        // Top Floating Liquid Glass Action Bar (Matching Reference Photo Screen 2: Shorts Feed)
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .statusBarsPadding()
+                .padding(horizontal = 14.dp, vertical = 6.dp)
+                .align(Alignment.TopCenter),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+            // Left: Back button to return to feed
+            GlassIconButton(
+                onClick = { onBackClick?.invoke() },
+                icon = Icons.AutoMirrored.Filled.ArrowBack,
+                contentDescription = "Back",
+                size = 40.dp,
+                iconSize = 22.dp,
+                testTag = "shorts_top_back"
+            )
+
+            // Right: Search & More (3 dots)
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                if (onSearchClick != null) {
+                    GlassIconButton(
+                        onClick = onSearchClick,
+                        icon = Icons.Default.Search,
+                        contentDescription = "Search",
+                        size = 40.dp,
+                        iconSize = 22.dp,
+                        testTag = "shorts_top_search"
+                    )
+                }
+
+                GlassIconButton(
+                    onClick = { activeSheetVideo = currentVideo },
+                    icon = Icons.Default.MoreVert,
+                    contentDescription = "More",
+                    size = 40.dp,
+                    iconSize = 22.dp,
+                    testTag = "shorts_top_more"
+                )
+            }
+        }
+
+        // Dedicated Liquid Glass Video Action Sheet for Shorts
+        if (activeSheetVideo != null) {
+            GlassVideoActionSheet(
+                video = activeSheetVideo!!,
+                onDismiss = { activeSheetVideo = null },
+                onToggleWatchLater = { onToggleSave(activeSheetVideo!!) },
+                onToggleDownload = { onToggleDownload?.invoke(activeSheetVideo!!) },
+                onToggleSubscribe = { onToggleSubscribe(activeSheetVideo!!) },
+                onShare = { onShare(activeSheetVideo!!) },
+                onEditTitle = { onEditTitle(activeSheetVideo!!) }
+            )
+        }
+    }
+}
+
+@Composable
+private fun ShortsItemPage(
+    video: VideoItem,
+    pageIndex: Int,
+    isActive: Boolean,
+    actionConfigs: List<ShortsActionConfig> = ShortsActionDefaults.DEFAULT_ACTIONS,
+    onToggleLike: () -> Unit,
+    onToggleDislike: () -> Unit,
+    onToggleSubscribe: () -> Unit,
+    onOpenComments: () -> Unit,
+    onToggleSave: () -> Unit,
+    onRemixClick: () -> Unit,
+    onEditTitle: () -> Unit,
+    onShare: () -> Unit,
+    onOpenMenu: () -> Unit = {},
+    shortsDoubleTapMode: String = "Heart",
+    customArtworks: Map<String, String> = emptyMap()
+) {
+    val coroutineScope = rememberCoroutineScope()
+    var isPlaying by remember { mutableStateOf(true) }
+    var showPauseOverlay by remember { mutableStateOf(false) }
+    var videoViewRef by remember { mutableStateOf<VideoView?>(null) }
+    var mediaPlayerRef by remember { mutableStateOf<MediaPlayer?>(null) }
+    var isSpeedBoosting by remember { mutableStateOf(false) }
+
+    // Smooth Native Double-Tap Like Animation state & animatables
+    var heartAnimOffset by remember { mutableStateOf<Offset?>(null) }
+    var showHeartAnim by remember { mutableStateOf(false) }
+    val animScale = remember { Animatable(0.2f) }
+    val animAlpha = remember { Animatable(1f) }
+    val animFloatY = remember { Animatable(0f) }
+
+    // Spinning disc animation for sound card
+    val infiniteTransition = rememberInfiniteTransition(label = "disc_rotation")
+    val rotation by infiniteTransition.animateFloat(
+        initialValue = 0f,
+        targetValue = 360f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(durationMillis = 4000, easing = LinearEasing),
+            repeatMode = RepeatMode.Restart
+        ),
+        label = "rotation"
+    )
+
+    BoxWithConstraints(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(Color.Black)
+            .pointerInput(isActive) {
+                detectTapGestures(
+                    onPress = {
+                        var isLongPressed = false
+                        val pressJob = coroutineScope.launch {
+                            delay(300)
+                            isLongPressed = true
+                            isSpeedBoosting = true
+                            try {
+                                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                                    val params = mediaPlayerRef?.playbackParams ?: android.media.PlaybackParams()
+                                    params.speed = 2.0f
+                                    mediaPlayerRef?.playbackParams = params
+                                }
+                            } catch (_: Exception) {}
+                        }
+                        try {
+                            tryAwaitRelease()
+                        } finally {
+                            pressJob.cancel()
+                            if (isLongPressed) {
+                                isSpeedBoosting = false
+                                try {
+                                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                                        val params = mediaPlayerRef?.playbackParams ?: android.media.PlaybackParams()
+                                        params.speed = 1.0f
+                                        mediaPlayerRef?.playbackParams = params
+                                    }
+                                } catch (_: Exception) {}
+                            }
+                        }
+                    },
+                    onTap = {
+                        isPlaying = !isPlaying
+                        if (!video.isPhotoSlideshow) {
+                            if (isPlaying) {
+                                videoViewRef?.start()
+                            } else {
+                                videoViewRef?.pause()
+                            }
+                        }
+                        showPauseOverlay = true
+                    },
+                    onDoubleTap = { tapOffset ->
+                        heartAnimOffset = tapOffset
+                        showHeartAnim = true
+                        if (!video.isLiked) {
+                            onToggleLike()
+                        }
+                    }
+                )
+            }
+    ) {
+        if (video.isPhotoSlideshow) {
+            // PHOTO-TO-VIDEO ANIMATION ENGINE (Ken Burns zoom/pan effect)
+            KenBurnsPhotoSlideshow(
+                video = video,
+                isActive = isActive,
+                isPlaying = isPlaying,
+                modifier = Modifier.fillMaxSize()
+            )
+        } else {
+            // VIDEO PLAYER (Native VideoView with 9:16 Full Screen Cover)
+            AndroidView(
+                factory = { ctx ->
+                    VideoView(ctx).apply {
+                        try {
+                            setOnErrorListener { _, _, _ -> true }
+                            if (!video.id.startsWith("sample_")) {
+                                setVideoURI(Uri.parse(video.uriString))
+                            }
+                            setOnPreparedListener { mp ->
+                                mediaPlayerRef = mp
+                                mp.isLooping = (video.clipEndMs <= 0 || video.clipEndMs >= video.durationMs)
+                                if (video.clipStartMs > 0) {
+                                    seekTo(video.clipStartMs.toInt())
+                                }
+                                if (isActive && isPlaying) {
+                                    start()
+                                }
+                            }
+                        } catch (_: Exception) {}
+                        videoViewRef = this
+                    }
+                },
+                update = { vv ->
+                    videoViewRef = vv
+                    if (isActive && isPlaying) {
+                        if (!vv.isPlaying) {
+                            try { vv.start() } catch (_: Exception) {}
+                        }
+                    } else {
+                        if (vv.isPlaying) {
+                            try { vv.pause() } catch (_: Exception) {}
+                        }
+                    }
+                },
+                modifier = Modifier.fillMaxSize()
+            )
+
+            // Loop 5-10s Snippet
+            if (video.clipEndMs > video.clipStartMs && video.clipEndMs < video.durationMs) {
+                LaunchedEffect(isActive, isPlaying) {
+                    while (isActive && isPlaying) {
+                        delay(250)
+                        val pos = videoViewRef?.currentPosition?.toLong() ?: 0L
+                        if (pos >= video.clipEndMs) {
+                            videoViewRef?.seekTo(video.clipStartMs.toInt())
+                        }
+                    }
+                }
+            }
+
+            // Fallback poster ONLY for sample mock items or before video loads (NOT when paused, so video stays paused right on current frame)
+            if (video.id.startsWith("sample_")) {
+                VideoThumbnailView(
+                    video = video,
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier.fillMaxSize()
+                )
+            }
+        }
+
+        // Long Press 2x Speed Gesture Top Overlay Indicator
+        AnimatedVisibility(
+            visible = isSpeedBoosting,
+            enter = fadeIn() + scaleIn(),
+            exit = fadeOut() + scaleOut(),
+            modifier = Modifier
+                .align(Alignment.TopCenter)
+                .statusBarsPadding()
+                .padding(top = 16.dp)
+        ) {
+            Box(
+                modifier = Modifier
+                    .clip(RoundedCornerShape(20.dp))
+                    .background(Color(0xD9000000))
+                    .border(1.dp, Color(0x55FFFFFF), RoundedCornerShape(20.dp))
+                    .padding(horizontal = 14.dp, vertical = 7.dp)
+                    .testTag("shorts_2x_speed_indicator"),
+                contentAlignment = Alignment.Center
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(
+                        imageVector = Icons.Default.FastForward,
+                        contentDescription = null,
+                        tint = YtRed,
+                        modifier = Modifier.size(18.dp)
+                    )
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text(
+                        text = "2x Speed",
+                        color = Color.White,
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+            }
+        }
+
+        // Smooth Native Shorts Like Animation (Scale, Fade, Upward Float, Heart/Thumb Mode & Custom Artwork)
+        LaunchedEffect(showHeartAnim) {
+            if (showHeartAnim) {
+                animScale.snapTo(0.2f)
+                animAlpha.snapTo(1f)
+                animFloatY.snapTo(0f)
+
+                coroutineScope.launch {
+                    animScale.animateTo(1.25f, tween(260, easing = FastOutSlowInEasing))
+                    animScale.animateTo(1.05f, tween(140, easing = LinearOutSlowInEasing))
+                }
+                coroutineScope.launch {
+                    animFloatY.animateTo(-70f, tween(850, easing = FastOutSlowInEasing))
+                }
+                coroutineScope.launch {
+                    delay(500)
+                    animAlpha.animateTo(0f, tween(350, easing = LinearEasing))
+                    showHeartAnim = false
+                }
+            }
+        }
+
+        if (showHeartAnim && heartAnimOffset != null) {
+            val density = LocalDensity.current
+            val offsetXdp = with(density) { heartAnimOffset!!.x.toDp() } - 48.dp
+            val offsetYdp = with(density) { heartAnimOffset!!.y.toDp() } - 48.dp + animFloatY.value.dp
+            val isThumbMode = shortsDoubleTapMode.equals("Thumb", ignoreCase = true)
+            val customArt = if (isThumbMode) {
+                customArtworks[AppElementCatalog.ART_THUMB] ?: customArtworks["thumb"]
+            } else {
+                customArtworks[AppElementCatalog.ART_HEART] ?: customArtworks["heart"]
+            }
+
+            Box(
+                modifier = Modifier
+                    .padding(start = offsetXdp.coerceAtLeast(0.dp), top = offsetYdp.coerceAtLeast(0.dp))
+                    .graphicsLayer {
+                        scaleX = animScale.value
+                        scaleY = animScale.value
+                        alpha = animAlpha.value
+                    }
+                    .size(96.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                if (!customArt.isNullOrBlank() && File(customArt).exists()) {
+                    AsyncImage(
+                        model = File(customArt),
+                        contentDescription = "Custom Like Animation",
+                        modifier = Modifier
+                            .size(68.dp)
+                            .clip(CircleShape)
+                            .border(2.dp, Color.White, CircleShape),
+                        contentScale = ContentScale.Crop
+                    )
+                } else if (isThumbMode) {
+                    Box(
+                        modifier = Modifier
+                            .size(80.dp)
+                            .clip(CircleShape)
+                            .background(Color(0xFF1976D2).copy(alpha = 0.35f)),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            imageVector = Icons.Filled.ThumbUp,
+                            contentDescription = "Thumb Up",
+                            tint = Color(0xFF2979FF),
+                            modifier = Modifier.size(54.dp)
+                        )
+                    }
+                } else {
+                    Box(
+                        modifier = Modifier
+                            .size(80.dp)
+                            .clip(CircleShape)
+                            .background(Color(0xFFFF1744).copy(alpha = 0.35f)),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            imageVector = Icons.Filled.Favorite,
+                            contentDescription = "Heart",
+                            tint = Color(0xFFFF1744),
+                            modifier = Modifier.size(58.dp)
+                        )
+                    }
+                }
+            }
+        }
+
+        // Tap Play/Pause Feedback Overlay
+        LaunchedEffect(showPauseOverlay) {
+            if (showPauseOverlay) {
+                delay(650)
+                showPauseOverlay = false
+            }
+        }
+
+        AnimatedVisibility(
+            visible = showPauseOverlay,
+            enter = fadeIn() + scaleIn(),
+            exit = fadeOut() + scaleOut(),
+            modifier = Modifier.align(Alignment.Center)
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(64.dp.scaled())
+                    .clip(CircleShape)
+                    .background(Color(0x66000000)),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    imageVector = Icons.Default.PlayArrow,
+                    contentDescription = null,
+                    tint = Color.White,
+                    modifier = Modifier.size(38.dp.scaled())
+                )
+            }
+        }
+
+        // Gentle transparent bottom gradient overlay for readability without obstructing the video center
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(140.dp.scaled())
+                .align(Alignment.BottomCenter)
+                .background(
+                    Brush.verticalGradient(
+                        colors = listOf(Color.Transparent, Color(0x22000000), Color(0x88000000))
+                    )
+                )
+        )
+
+        // Bottom Left Info Section: Channel row, Title & Hashtags, and Sound Ticker
+        // Dynamically and safely positioned above the bottom navigation bar
+        Column(
+            modifier = Modifier
+                .align(Alignment.BottomStart)
+                .fillMaxWidth(0.74f)
+                .padding(start = 12.dp.scaled(), end = 4.dp, bottom = 12.dp)
+        ) {
+            // Channel info row: Circular avatar, @username, white capsule Subscribe button
+            Row(
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(32.dp.scaled())
+                        .clip(CircleShape)
+                        .background(YtAvatarTeal),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        text = video.displayChannelName.take(1).uppercase(),
+                        color = Color.White,
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 13.sp.scaled()
+                    )
+                }
+
+                Spacer(modifier = Modifier.width(7.dp.scaled()))
+
+                Text(
+                    text = "@${video.displayChannelName.replace(" ", "").lowercase()}",
+                    color = Color.White,
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 13.sp.scaled(),
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+
+                val subscribeAction = actionConfigs.find { it.id == ShortsActionIds.SUBSCRIBE }
+                val isSubscribeVisible = subscribeAction?.isVisible != false
+                val subscribeScale = subscribeAction?.scale ?: 1.0f
+
+                if (isSubscribeVisible) {
+                    Spacer(modifier = Modifier.width(8.dp.scaled()))
+
+                    // Exactly ONE Customizable Liquid Glass Subscribe Pill button on Shorts
+                    LiquidGlassSubscribeButton(
+                        isSubscribed = video.isSubscribed,
+                        onToggleSubscribe = onToggleSubscribe,
+                        customArtwork = customArtworks[ShortsActionIds.SUBSCRIBE] ?: customArtworks["subscribe"],
+                        modifier = Modifier
+                            .graphicsLayer(scaleX = subscribeScale, scaleY = subscribeScale),
+                        testTag = "shorts_subscribe_button"
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.height(3.dp.scaled()))
+
+            // Video Description / Title (Compact, max 2 lines)
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Text(
+                    text = video.displayTitle,
+                    color = Color.White,
+                    fontSize = 13.sp.scaled(),
+                    fontWeight = FontWeight.Normal,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                    lineHeight = 16.sp.scaled(),
+                    modifier = Modifier.weight(1f, fill = false)
+                )
+
+                Spacer(modifier = Modifier.width(5.dp.scaled()))
+
+                // Edit Title Icon
+                Box(
+                    modifier = Modifier
+                        .size(22.dp.scaled())
+                        .clip(CircleShape)
+                        .background(Color(0x44FFFFFF))
+                        .clickable { onEditTitle() }
+                        .testTag("shorts_edit_title_button"),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Edit,
+                        contentDescription = "Edit Title",
+                        tint = Color.White,
+                        modifier = Modifier.size(12.dp.scaled())
+                    )
+                }
+            }
+
+            // Hashtags (if available)
+            if (video.hashtags.isNotBlank()) {
+                Spacer(modifier = Modifier.height(2.dp.scaled()))
+                Text(
+                    text = video.hashtags,
+                    color = Color.White.copy(alpha = 0.85f),
+                    fontSize = 11.sp.scaled(),
+                    fontWeight = FontWeight.Normal,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
+
+            Spacer(modifier = Modifier.height(3.dp.scaled()))
+
+            // Audio ticker bar: Dark semi-transparent pill with music note and sound name
+            Box(
+                modifier = Modifier
+                    .clip(RoundedCornerShape(12.dp))
+                    .background(Color(0x66000000))
+                    .padding(horizontal = 7.dp.scaled(), vertical = 3.dp.scaled())
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(
+                        imageVector = Icons.Default.MusicNote,
+                        contentDescription = null,
+                        tint = Color.White,
+                        modifier = Modifier.size(12.dp.scaled())
+                    )
+                    Spacer(modifier = Modifier.width(4.dp.scaled()))
+                    Text(
+                        text = if (video.isPhotoSlideshow) "Original sound - Photo Showcase Beat" else "Original sound - ${video.displayChannelName}",
+                        color = Color.White,
+                        fontSize = 10.sp.scaled(),
+                        fontWeight = FontWeight.Medium,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
+            }
+        }
+
+        val appAccentColor = LocalAppAccentColor.current
+        val screenWidth = maxWidth
+        val screenHeight = maxHeight
+
+        // Dynamic Customizable Action Buttons: Exclude DISLIKE, MORE_MENU, and duplicate SUBSCRIBE from right action column
+        actionConfigs
+            .filter { it.isVisible && it.id != ShortsActionIds.DISLIKE && it.id != ShortsActionIds.MORE_MENU && it.id != ShortsActionIds.SUBSCRIBE }
+            .forEach { action ->
+                val posX = (screenWidth.value * action.xRatio).dp.coerceIn(4.dp, screenWidth - 62.dp)
+                val posY = (screenHeight.value * action.yRatio).dp.coerceIn(4.dp, screenHeight - 82.dp)
+
+                Box(
+                    modifier = Modifier
+                        .offset(x = posX, y = posY)
+                        .graphicsLayer(scaleX = action.scale, scaleY = action.scale),
+                    contentAlignment = Alignment.Center
+                ) {
+                    when (action.id) {
+                        ShortsActionIds.LIKE -> {
+                            ShortsActionButton(
+                                icon = if (video.isLiked) Icons.Filled.ThumbUp else Icons.Outlined.ThumbUp,
+                                label = video.formattedLikesCount,
+                                tint = if (video.isLiked) appAccentColor else Color.White,
+                                testTag = "shorts_like_button",
+                                customArtwork = customArtworks[action.id],
+                                onClick = onToggleLike
+                            )
+                        }
+                        ShortsActionIds.COMMENT -> {
+                            ShortsActionButton(
+                                icon = Icons.Outlined.ChatBubbleOutline,
+                                label = video.formattedCommentsCount,
+                                tint = Color.White,
+                                testTag = "shorts_comment_button",
+                                customArtwork = customArtworks[action.id],
+                                onClick = onOpenComments
+                            )
+                        }
+                        ShortsActionIds.SHARE -> {
+                            ShortsActionButton(
+                                icon = Icons.Outlined.Share,
+                                label = "Share",
+                                tint = Color.White,
+                                testTag = "shorts_share_button",
+                                customArtwork = customArtworks[action.id],
+                                onClick = onShare
+                            )
+                        }
+                        ShortsActionIds.REMIX -> {
+                            ShortsActionButton(
+                                icon = Icons.Default.Repeat,
+                                label = "Remix",
+                                tint = Color.White,
+                                testTag = "shorts_remix_button",
+                                customArtwork = customArtworks[action.id],
+                                onClick = onRemixClick
+                            )
+                        }
+                    ShortsActionIds.SOUND_TRACK -> {
+                        Box(
+                            modifier = Modifier
+                                .size(32.dp.scaled())
+                                .clip(RoundedCornerShape(6.dp))
+                                .background(Color(0xFF222222))
+                                .border(1.2.dp.scaled(), Color.White.copy(alpha = 0.8f), RoundedCornerShape(6.dp))
+                                .rotate(rotation)
+                                .clickable { onRemixClick() },
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .size(14.dp.scaled())
+                                    .clip(CircleShape)
+                                    .background(YtRed),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.MusicNote,
+                                    contentDescription = "Sound Album",
+                                    tint = Color.White,
+                                    modifier = Modifier.size(9.dp.scaled())
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    DisposableEffect(pageIndex, video.id) {
+        onDispose {
+            try {
+                videoViewRef?.stopPlayback()
+            } catch (_: Exception) {}
+        }
+    }
+}
+
+/**
+ * PHOTO ANIMATOR / SLIDESHOW ENGINE:
+ * Automatically groups local photos and animates them with smooth Ken Burns zoom & pan transitions.
+ */
+@Composable
+private fun KenBurnsPhotoSlideshow(
+    video: VideoItem,
+    isActive: Boolean,
+    isPlaying: Boolean,
+    modifier: Modifier = Modifier
+) {
+    val context = LocalContext.current
+    val photoList = remember(video.photoUris, video.uriString) {
+        if (video.photoUris.isNotEmpty()) video.photoUris else listOf(video.uriString)
+    }
+
+    var currentPhotoIndex by remember { mutableIntStateOf(0) }
+
+    // Cycle photos every 2.5 seconds when active and playing
+    LaunchedEffect(isActive, isPlaying, photoList.size) {
+        if (photoList.size > 1 && isActive && isPlaying) {
+            while (true) {
+                delay(2500)
+                currentPhotoIndex = (currentPhotoIndex + 1) % photoList.size
+            }
+        }
+    }
+
+    // Ken Burns Zoom/Pan Animation
+    val infiniteTransition = rememberInfiniteTransition(label = "ken_burns_zoom")
+    val scale by infiniteTransition.animateFloat(
+        initialValue = 1.0f,
+        targetValue = 1.15f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(durationMillis = 2500, easing = LinearEasing),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "ken_burns_scale"
+    )
+
+    Box(modifier = modifier.fillMaxSize().background(Color.Black)) {
+        // Story progress indicators at top
+        if (photoList.size > 1) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .statusBarsPadding()
+                    .padding(horizontal = 12.dp, vertical = 8.dp),
+                horizontalArrangement = Arrangement.spacedBy(4.dp)
+            ) {
+                photoList.forEachIndexed { idx, _ ->
+                    val progress = when {
+                        idx < currentPhotoIndex -> 1f
+                        idx == currentPhotoIndex -> 0.7f
+                        else -> 0f
+                    }
+                    LinearProgressIndicator(
+                        progress = { progress },
+                        modifier = Modifier
+                            .weight(1f)
+                            .height(2.5.dp)
+                            .clip(RoundedCornerShape(2.dp)),
+                        color = Color.White,
+                        trackColor = Color(0x55FFFFFF)
+                    )
+                }
+            }
+        }
+
+        // Active Photo with Ken Burns Effect
+        val currentPhotoUri = photoList.getOrNull(currentPhotoIndex) ?: video.uriString
+
+        AnimatedContent(
+            targetState = currentPhotoUri,
+            transitionSpec = { fadeIn(tween(600)) togetherWith fadeOut(tween(600)) },
+            label = "photo_crossfade"
+        ) { photoUri ->
+            AsyncImage(
+                model = ImageRequest.Builder(context)
+                    .data(photoUri)
+                    .crossfade(true)
+                    .build(),
+                contentDescription = null,
+                contentScale = ContentScale.Crop,
+                modifier = Modifier
+                    .fillMaxSize()
+                    .graphicsLayer {
+                        scaleX = scale
+                        scaleY = scale
+                    }
+            )
+        }
+    }
+}
+
+/**
+ * Compact, sleek optical action button for Shorts:
+ * - Icon: 24dp sleek vector inside Liquid Glass capsule
+ * - Dimensional specular reflection + optional neon outline
+ * - Small compact text label underneath (11sp, SemiBold)
+ */
+@Composable
+private fun ShortsActionButton(
+    icon: ImageVector,
+    label: String,
+    tint: Color,
+    testTag: String,
+    customArtwork: String? = null,
+    onClick: () -> Unit
+) {
+    val glassConfig = com.example.ui.theme.LocalLiquidGlassConfig.current
+    val customization = com.example.ui.theme.LocalUiCustomization.current
+    val scale = customization.shortsActionIconScale
+    val btnStyle = customization.shortsActionButtonStyle
+
+    Column(
+        horizontalAlignment = Alignment.CenterHorizontally,
+        modifier = Modifier
+            .clickable(
+                interactionSource = remember { MutableInteractionSource() },
+                indication = null
+            ) { onClick() }
+            .testTag(testTag)
+    ) {
+        val buttonShape = CircleShape
+        val isGlass = glassConfig.isEnabled || glassConfig.neonEnabled
+        Box(
+            modifier = Modifier
+                .size((42 * scale).dp.scaled())
+                .then(
+                    when (btnStyle) {
+                        "Glow" -> Modifier
+                            .clip(CircleShape)
+                            .background(tint.copy(alpha = 0.35f))
+                            .border(1.5.dp, tint, CircleShape)
+                        "Minimal" -> Modifier
+                            .clip(CircleShape)
+                            .background(Color(0x55000000))
+                        else -> if (isGlass) {
+                            Modifier.liquidGlassSurface(
+                                shape = buttonShape,
+                                config = glassConfig,
+                                accentColor = tint,
+                                elevation = 4.dp
+                            )
+                        } else {
+                            Modifier
+                                .clip(buttonShape)
+                                .background(Color(0x33000000))
+                        }
+                    }
+                ),
+            contentAlignment = Alignment.Center
+        ) {
+            if (!customArtwork.isNullOrBlank() && File(customArtwork).exists()) {
+                AsyncImage(
+                    model = File(customArtwork),
+                    contentDescription = label,
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .clip(buttonShape),
+                    contentScale = ContentScale.Crop
+                )
+            } else {
+                Icon(
+                    imageVector = icon,
+                    contentDescription = label,
+                    tint = tint,
+                    modifier = Modifier.size((24 * scale).dp.scaled())
+                )
+            }
+        }
+        Spacer(modifier = Modifier.height(2.dp.scaled()))
+        Text(
+            text = label,
+            color = Color.White,
+            fontSize = 11.sp.scaled(),
+            fontWeight = FontWeight.SemiBold
+        )
+    }
+}

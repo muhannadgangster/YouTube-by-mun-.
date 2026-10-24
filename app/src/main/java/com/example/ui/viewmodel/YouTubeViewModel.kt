@@ -1,0 +1,664 @@
+package com.example.ui.viewmodel
+
+import android.app.Application
+import android.net.Uri
+import androidx.lifecycle.AndroidViewModel
+import androidx.lifecycle.viewModelScope
+import com.example.data.SettingsManager
+import com.example.data.VideoItem
+import com.example.data.local.AppNotificationEntity
+import com.example.data.local.CommentEntity
+import com.example.data.repository.VideoRepository
+import com.example.util.NotificationHelper
+import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.launch
+
+import com.example.data.InterfaceBuilderManager
+import com.example.data.model.ActionTypes
+import com.example.data.model.CustomPageDefinition
+
+class YouTubeViewModel(application: Application) : AndroidViewModel(application) {
+    private val repository = VideoRepository(application)
+    val settingsManager = SettingsManager(application)
+    val interfaceBuilderManager = InterfaceBuilderManager(application)
+
+    private val _activeCustomPage = MutableStateFlow<CustomPageDefinition?>(null)
+    val activeCustomPage: StateFlow<CustomPageDefinition?> = _activeCustomPage.asStateFlow()
+
+    fun openCustomPage(page: CustomPageDefinition) {
+        _activeCustomPage.value = page
+    }
+
+    fun openCustomPageById(pageId: String) {
+        val page = interfaceBuilderManager.getCustomPage(pageId)
+        if (page != null) {
+            _activeCustomPage.value = page
+        }
+    }
+
+    fun closeCustomPage() {
+        _activeCustomPage.value = null
+    }
+
+    fun executeIconAction(actionType: String, actionTarget: String, onNotice: (String) -> Unit = {}) {
+        when (actionType) {
+            ActionTypes.OPEN_CUSTOM_PAGE -> {
+                if (actionTarget.isNotBlank()) {
+                    openCustomPageById(actionTarget)
+                } else {
+                    val firstPage = interfaceBuilderManager.customPages.value.firstOrNull()
+                    if (firstPage != null) openCustomPage(firstPage)
+                    else onNotice("No custom page assigned")
+                }
+            }
+            ActionTypes.OPEN_SCREEN -> {
+                when (actionTarget.lowercase()) {
+                    "shorts", "1" -> selectTab(1)
+                    "subscriptions", "3" -> selectTab(3)
+                    "library", "you", "profile", "4" -> selectTab(4)
+                    else -> selectTab(0)
+                }
+            }
+            ActionTypes.OPEN_SETTINGS -> {
+                setSettingsOpen(true)
+            }
+            ActionTypes.TOGGLE_FEATURE -> {
+                when (actionTarget.lowercase()) {
+                    "neon" -> settingsManager.setNeonLightsMaster(!settingsManager.neonLightsMaster.value)
+                    "glass" -> settingsManager.setLiquidGlassMaster(!settingsManager.liquidGlassMaster.value)
+                    "dark" -> settingsManager.setDarkTheme(!settingsManager.darkTheme.value)
+                    else -> onNotice("Toggled $actionTarget")
+                }
+            }
+            ActionTypes.SHOW_INFO -> {
+                onNotice(if (actionTarget.isNotBlank()) actionTarget else "Custom Action Triggered")
+            }
+            else -> onNotice("Action Triggered")
+        }
+    }
+
+    private val _shuffleSeed = MutableStateFlow(0L)
+    val shuffleSeed: StateFlow<Long> = _shuffleSeed.asStateFlow()
+
+    val allVideos: StateFlow<List<VideoItem>> = repository.allVideosFlow
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    val shortsVideos: StateFlow<List<VideoItem>> = combine(
+        repository.shortsVideosFlow,
+        _shuffleSeed
+    ) { list, seed ->
+        if (seed != 0L) {
+            list.shuffled(kotlin.random.Random(seed + 42L))
+        } else {
+            list
+        }
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    val subscribedVideos: StateFlow<List<VideoItem>> = repository.subscribedVideosFlow
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    val likedVideos: StateFlow<List<VideoItem>> = repository.likedVideosFlow
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    val watchLaterVideos: StateFlow<List<VideoItem>> = repository.watchLaterVideosFlow
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    val downloadedVideos: StateFlow<List<VideoItem>> = repository.downloadedVideosFlow
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    val historyVideos: StateFlow<List<VideoItem>> = repository.historyVideosFlow
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    // UI Navigation & Tab selection
+    private val _selectedTab = MutableStateFlow(0) // 0: Home, 1: Shorts, 2: Add, 3: Subscriptions, 4: You
+    val selectedTab: StateFlow<Int> = _selectedTab.asStateFlow()
+
+    // Filter Chips
+    private val _selectedFilter = MutableStateFlow("All")
+    val selectedFilter: StateFlow<String> = _selectedFilter.asStateFlow()
+
+    // Search
+    private val _isSearchActive = MutableStateFlow(false)
+    val isSearchActive: StateFlow<Boolean> = _isSearchActive.asStateFlow()
+
+    private val _searchQuery = MutableStateFlow("")
+    val searchQuery: StateFlow<String> = _searchQuery.asStateFlow()
+
+    // Currently playing video (if null, player is closed / showing feed)
+    private val _currentlyPlaying = MutableStateFlow<VideoItem?>(null)
+    val currentlyPlaying: StateFlow<VideoItem?> = _currentlyPlaying.asStateFlow()
+
+    // Floating Mini-Player / Picture-in-Picture state
+    private val _isPlayerMinimized = MutableStateFlow(false)
+    val isPlayerMinimized: StateFlow<Boolean> = _isPlayerMinimized.asStateFlow()
+
+    private val _isPlaybackPaused = MutableStateFlow(false)
+    val isPlaybackPaused: StateFlow<Boolean> = _isPlaybackPaused.asStateFlow()
+
+    // Edit Profile Dialog state
+    private val _showEditProfileDialog = MutableStateFlow(false)
+    val showEditProfileDialog: StateFlow<Boolean> = _showEditProfileDialog.asStateFlow()
+
+    val userName: StateFlow<String> = settingsManager.userName
+    val userHandle: StateFlow<String> = settingsManager.userHandle
+    val userAvatarUri: StateFlow<String?> = settingsManager.userAvatarUri
+
+    // Renaming dialog state (Custom Title & Hashtags feature via '+' icon)
+    private val _editingVideo = MutableStateFlow<VideoItem?>(null)
+    val editingVideo: StateFlow<VideoItem?> = _editingVideo.asStateFlow()
+
+    // Plus (+) bottom sheet
+    private val _showPlusSheet = MutableStateFlow(false)
+    val showPlusSheet: StateFlow<Boolean> = _showPlusSheet.asStateFlow()
+
+    // Comments / Notes Sheet
+    private val _commentingVideo = MutableStateFlow<VideoItem?>(null)
+    val commentingVideo: StateFlow<VideoItem?> = _commentingVideo.asStateFlow()
+
+    @OptIn(ExperimentalCoroutinesApi::class)
+    val activeComments: StateFlow<List<CommentEntity>> = _commentingVideo
+        .flatMapLatest { video ->
+            if (video == null) flowOf(emptyList())
+            else repository.getCommentsForVideo(video.id)
+        }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    @OptIn(ExperimentalCoroutinesApi::class)
+    val activeCommentCount: StateFlow<Int> = _commentingVideo
+        .flatMapLatest { video ->
+            if (video == null) flowOf(0)
+            else repository.getCommentCountForVideo(video.id)
+        }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 0)
+
+    // Notification sheet & real in-app notifications
+    private val _showNotificationsSheet = MutableStateFlow(false)
+    val showNotificationsSheet: StateFlow<Boolean> = _showNotificationsSheet.asStateFlow()
+
+    val notifications: StateFlow<List<AppNotificationEntity>> = repository.notificationsFlow
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    val unreadNotificationCount: StateFlow<Int> = repository.unreadNotificationCountFlow
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 0)
+
+    fun markNotificationAsRead(id: String) {
+        viewModelScope.launch {
+            repository.markNotificationAsRead(id)
+        }
+    }
+
+    fun markAllNotificationsAsRead() {
+        viewModelScope.launch {
+            repository.markAllNotificationsAsRead()
+        }
+    }
+
+    fun clearAllNotifications() {
+        viewModelScope.launch {
+            repository.clearAllNotifications()
+        }
+    }
+
+    // Full Settings Screen Navigation
+    private val _showSettings = MutableStateFlow(false)
+    val showSettings: StateFlow<Boolean> = _showSettings.asStateFlow()
+
+    // Dedicated Downloads Screen Navigation (Screenshot 4)
+    private val _showDownloadsScreen = MutableStateFlow(false)
+    val showDownloadsScreen: StateFlow<Boolean> = _showDownloadsScreen.asStateFlow()
+
+    // YouTube Shorts Camera UI (Screenshot 2)
+    private val _showShortsCamera = MutableStateFlow(false)
+    val showShortsCamera: StateFlow<Boolean> = _showShortsCamera.asStateFlow()
+
+    // Filtered videos based on search & category chip
+    val filteredVideos: StateFlow<List<VideoItem>> = combine(
+        allVideos,
+        _selectedFilter,
+        _searchQuery,
+        _shuffleSeed
+    ) { videos, filter, query, seed ->
+        var result = videos
+        if (query.isNotBlank()) {
+            result = result.filter {
+                it.displayTitle.contains(query, ignoreCase = true) ||
+                        it.displayChannelName.contains(query, ignoreCase = true) ||
+                        it.hashtags.contains(query, ignoreCase = true)
+            }
+        } else {
+            result = when (filter) {
+                "Shorts" -> result.filter { it.isShort }
+                "Videos" -> result.filter { !it.isShort }
+                "Downloaded" -> result.filter { it.isDownloaded }
+                "Favorites" -> result.filter { it.isLiked || it.isSubscribed }
+                else -> result
+            }
+        }
+        if (seed != 0L) {
+            result.shuffled(kotlin.random.Random(seed))
+        } else {
+            result
+        }
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    init {
+        scanStorage()
+    }
+
+    private val _isRefreshing = MutableStateFlow(false)
+    val isRefreshing: StateFlow<Boolean> = _isRefreshing.asStateFlow()
+
+    fun scanStorage() {
+        viewModelScope.launch {
+            repository.scanStorage()
+        }
+    }
+
+    fun shuffleVideos() {
+        _shuffleSeed.value = System.currentTimeMillis()
+    }
+
+    fun refreshFeed() {
+        viewModelScope.launch {
+            _isRefreshing.value = true
+            repository.scanStorage()
+            _shuffleSeed.value = System.currentTimeMillis()
+            kotlinx.coroutines.delay(120)
+            _isRefreshing.value = false
+        }
+    }
+
+    fun selectTab(index: Int) {
+        if (index == 2) {
+            _showShortsCamera.value = true
+        } else {
+            _selectedTab.value = index
+        }
+    }
+
+    fun saveRecordedShort(
+        title: String,
+        hashtags: String,
+        durationMs: Long,
+        videoUri: String = "",
+        audioTitle: String = ""
+    ) {
+        viewModelScope.launch {
+            val shortItem = repository.saveRecordedShort(
+                title = title,
+                hashtags = hashtags,
+                durationMs = durationMs,
+                videoUri = videoUri,
+                audioTitle = audioTitle
+            )
+            _showShortsCamera.value = false
+            selectTab(1)
+
+            NotificationHelper.showNotification(
+                context = getApplication(),
+                notificationId = 1002,
+                title = "MyTube — Video ready",
+                message = "\"${shortItem.displayTitle}\" has been created and added to your Shorts feed.",
+                videoId = shortItem.id
+            )
+        }
+    }
+
+    fun selectFilter(filter: String) {
+        _selectedFilter.value = filter
+    }
+
+    val searchHistory: StateFlow<List<String>> = settingsManager.searchHistory
+
+    fun setSearchActive(active: Boolean) {
+        _isSearchActive.value = active
+        if (!active) _searchQuery.value = ""
+    }
+
+    fun updateSearchQuery(query: String) {
+        _searchQuery.value = query
+    }
+
+    fun submitSearch(query: String) {
+        val trimmed = query.trim()
+        if (trimmed.isNotBlank()) {
+            settingsManager.addSearchQuery(trimmed)
+            _searchQuery.value = trimmed
+        }
+    }
+
+    fun removeSearchQuery(query: String) {
+        settingsManager.removeSearchQuery(query)
+    }
+
+    fun clearSearchHistory() {
+        settingsManager.clearSearchHistory()
+    }
+
+    private val _targetShortId = MutableStateFlow<String?>(null)
+    val targetShortId: StateFlow<String?> = _targetShortId.asStateFlow()
+
+    fun openShortsAt(shortItem: VideoItem) {
+        _targetShortId.value = shortItem.id
+        _selectedTab.value = 1
+        _isSearchActive.value = false
+        _showSettings.value = false
+    }
+
+    fun clearTargetShort() {
+        _targetShortId.value = null
+    }
+
+    fun playVideo(video: VideoItem) {
+        _currentlyPlaying.value = video
+        _isPlayerMinimized.value = false
+        _isPlaybackPaused.value = false
+        _isSearchActive.value = false
+        if (!settingsManager.pauseHistory.value) {
+            viewModelScope.launch {
+                repository.recordWatchProgress(video.id, video.watchPositionMs.coerceAtLeast(1000L))
+            }
+        }
+    }
+
+    fun closePlayer() {
+        _currentlyPlaying.value = null
+        _isPlayerMinimized.value = false
+        _isPlaybackPaused.value = false
+    }
+
+    fun minimizePlayer() {
+        _isPlayerMinimized.value = true
+    }
+
+    fun expandPlayer() {
+        _isPlayerMinimized.value = false
+    }
+
+    fun togglePlaybackPaused() {
+        _isPlaybackPaused.value = !_isPlaybackPaused.value
+    }
+
+    fun setEditProfileDialogOpen(open: Boolean) {
+        _showEditProfileDialog.value = open
+    }
+
+    fun updateProfile(name: String, handle: String, avatarUri: String?) {
+        settingsManager.updateProfile(name, handle, avatarUri)
+        _showEditProfileDialog.value = false
+    }
+
+    fun openRenameDialog(video: VideoItem) {
+        _editingVideo.value = video
+    }
+
+    fun dismissRenameDialog() {
+        _editingVideo.value = null
+    }
+
+    fun saveCustomTitle(newTitle: String) {
+        val video = _editingVideo.value ?: return
+        saveCustomTitleAndHashtags(newTitle, video.hashtags)
+    }
+
+    fun saveCustomTitleAndHashtags(newTitle: String, newHashtags: String) {
+        val video = _editingVideo.value ?: return
+        viewModelScope.launch {
+            repository.setCustomTitleAndHashtags(video.id, newTitle.trim(), newHashtags.trim())
+            if (_currentlyPlaying.value?.id == video.id) {
+                _currentlyPlaying.value = _currentlyPlaying.value?.copy(
+                    customTitle = newTitle.trim(),
+                    hashtags = newHashtags.trim()
+                )
+            }
+            _editingVideo.value = null
+            NotificationHelper.showNotification(
+                context = getApplication(),
+                notificationId = 2004,
+                title = "MyTube — Custom title updated",
+                message = "New title saved: \"${newTitle.trim()}\"",
+                videoId = video.id
+            )
+        }
+    }
+
+    fun toggleLike(video: VideoItem) {
+        viewModelScope.launch {
+            repository.toggleLike(video.id)
+            val wasLiked = video.isLiked
+            if (_currentlyPlaying.value?.id == video.id) {
+                _currentlyPlaying.value = _currentlyPlaying.value?.copy(
+                    isLiked = !wasLiked,
+                    isDisliked = false
+                )
+            }
+            if (!wasLiked) {
+                NotificationHelper.showNotification(
+                    context = getApplication(),
+                    notificationId = 2005,
+                    title = "MyTube — Added to Liked Videos",
+                    message = "\"${video.displayTitle}\" has been saved to your Liked list.",
+                    videoId = video.id
+                )
+            }
+        }
+    }
+
+    fun toggleDislike(video: VideoItem) {
+        viewModelScope.launch {
+            repository.toggleDislike(video.id)
+            if (_currentlyPlaying.value?.id == video.id) {
+                val wasDisliked = _currentlyPlaying.value?.isDisliked ?: false
+                _currentlyPlaying.value = _currentlyPlaying.value?.copy(
+                    isDisliked = !wasDisliked,
+                    isLiked = false
+                )
+            }
+        }
+    }
+
+    fun toggleSubscribe(video: VideoItem) {
+        viewModelScope.launch {
+            repository.toggleSubscription(video.id)
+            val wasSubscribed = video.isSubscribed
+            if (_currentlyPlaying.value?.id == video.id) {
+                _currentlyPlaying.value = _currentlyPlaying.value?.copy(isSubscribed = !wasSubscribed)
+            }
+            if (!wasSubscribed) {
+                NotificationHelper.showNotification(
+                    context = getApplication(),
+                    notificationId = 2001,
+                    title = "MyTube — Subscribed",
+                    message = "Subscribed to @${video.displayChannelName}. You'll see their latest offline clips.",
+                    videoId = video.id
+                )
+            }
+        }
+    }
+
+    fun toggleWatchLater(video: VideoItem) {
+        viewModelScope.launch {
+            repository.toggleWatchLater(video.id)
+            val wasWL = video.isWatchLater
+            if (_currentlyPlaying.value?.id == video.id) {
+                _currentlyPlaying.value = _currentlyPlaying.value?.copy(isWatchLater = !wasWL)
+            }
+            if (!wasWL) {
+                NotificationHelper.showNotification(
+                    context = getApplication(),
+                    notificationId = 2002,
+                    title = "MyTube — Watch Later",
+                    message = "\"${video.displayTitle}\" added to Watch Later list.",
+                    videoId = video.id
+                )
+            }
+        }
+    }
+
+    fun toggleDownloaded(video: VideoItem) {
+        viewModelScope.launch {
+            repository.toggleDownloaded(video.id)
+            val wasDl = video.isDownloaded
+            if (_currentlyPlaying.value?.id == video.id) {
+                _currentlyPlaying.value = _currentlyPlaying.value?.copy(isDownloaded = !wasDl)
+            }
+            if (!wasDl) {
+                NotificationHelper.showNotification(
+                    context = getApplication(),
+                    notificationId = 2003,
+                    title = "MyTube — Video Saved Offline",
+                    message = "\"${video.displayTitle}\" is now saved for offline playback.",
+                    videoId = video.id
+                )
+            }
+        }
+    }
+
+    fun recordProgress(video: VideoItem, positionMs: Long) {
+        if (_currentlyPlaying.value?.id == video.id) {
+            _currentlyPlaying.value = _currentlyPlaying.value?.copy(watchPositionMs = positionMs)
+        }
+        if (!settingsManager.pauseHistory.value) {
+            viewModelScope.launch {
+                repository.recordWatchProgress(video.id, positionMs)
+            }
+        }
+    }
+
+    fun openComments(video: VideoItem) {
+        _commentingVideo.value = video
+    }
+
+    fun closeComments() {
+        _commentingVideo.value = null
+    }
+
+    fun saveComment(commentText: String) {
+        val video = _commentingVideo.value ?: return
+        viewModelScope.launch {
+            repository.saveNotes(video.id, commentText)
+            repository.addComment(
+                videoId = video.id,
+                text = commentText.trim()
+            )
+            if (_currentlyPlaying.value?.id == video.id) {
+                _currentlyPlaying.value = _currentlyPlaying.value?.copy(userNotes = commentText)
+            }
+        }
+    }
+
+    fun postComment(videoId: String, text: String) {
+        if (text.isBlank()) return
+        viewModelScope.launch {
+            repository.addComment(
+                videoId = videoId,
+                text = text.trim()
+            )
+        }
+    }
+
+    fun toggleCommentLike(commentId: Long) {
+        viewModelScope.launch {
+            repository.toggleCommentLike(commentId)
+        }
+    }
+
+
+    fun setPlusSheetOpen(open: Boolean) {
+        _showPlusSheet.value = open
+    }
+
+    fun setNotificationsSheetOpen(open: Boolean) {
+        _showNotificationsSheet.value = open
+    }
+
+    fun setSettingsOpen(open: Boolean) {
+        _showSettings.value = open
+    }
+
+    fun setDownloadsScreenOpen(open: Boolean) {
+        _showDownloadsScreen.value = open
+    }
+
+    fun setShortsCameraOpen(open: Boolean) {
+        _showShortsCamera.value = open
+    }
+
+    fun importGalleryVideo(uri: Uri, customTitle: String? = null, hashtags: String? = null) {
+        viewModelScope.launch {
+            val imported = repository.importVideo(uri, customTitle, hashtags)
+            _showPlusSheet.value = false
+            if (imported != null) {
+                NotificationHelper.showNotification(
+                    context = getApplication(),
+                    notificationId = 1003,
+                    title = "MyTube — Video imported",
+                    message = "\"${imported.displayTitle}\" has been imported into your library.",
+                    videoId = imported.id
+                )
+                playVideo(imported)
+            }
+        }
+    }
+
+    fun importShortMedia(uri: Uri) {
+        viewModelScope.launch {
+            val imported = repository.importVideo(
+                uri = uri,
+                customTitle = null,
+                hashtags = "#Shorts #Trending #AutoClip #Gallery"
+            )
+            _showPlusSheet.value = false
+            if (imported != null) {
+                NotificationHelper.showNotification(
+                    context = getApplication(),
+                    notificationId = 1004,
+                    title = "MyTube — New video added",
+                    message = "\"${imported.displayTitle}\" has been added to your Shorts feed.",
+                    videoId = imported.id
+                )
+            }
+            selectTab(1) // Jump straight to Shorts
+        }
+    }
+
+    fun createPhotoSlideshow(
+        photoUris: List<Uri>,
+        title: String,
+        hashtags: String,
+        audioUri: Uri? = null,
+        durationSeconds: Int = 8
+    ) {
+        viewModelScope.launch {
+            val slideshow = repository.createPhotoSlideshow(
+                photoUris = photoUris,
+                title = title,
+                hashtags = hashtags,
+                audioUri = audioUri,
+                durationSeconds = durationSeconds
+            )
+            _showPlusSheet.value = false
+            selectTab(1) // Navigate to Shorts feed
+        }
+    }
+
+    fun clearWatchHistory() {
+        viewModelScope.launch {
+            repository.clearWatchHistory()
+        }
+    }
+
+    fun deleteAllDownloads() {
+        viewModelScope.launch {
+            repository.deleteAllDownloads()
+        }
+    }
+}
