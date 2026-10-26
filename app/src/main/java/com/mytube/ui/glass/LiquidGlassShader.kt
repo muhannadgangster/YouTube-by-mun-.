@@ -7,11 +7,17 @@ import androidx.annotation.RequiresApi
 /**
  * Android Graphics Shading Language (AGSL) Real-Time Optical Liquid Glass Shader.
  * 
- * Physically grounded optical liquid glass:
- * - Truly fluid and transparent (lets live background, videos, and UI shine through crisp and clear)
- * - True optical lens displacement and curvature ("ہلکی سی ٹلٹی" - smooth tilted refraction normal)
- * - Prismatic chromatic dispersion (RGB channel separation on curved edges)
- * - Elegant Fresnel specular rim highlight and meniscus curvature
+ * Rebuilt according to exact physics specification:
+ * - Rounded-rectangle signed distance field (SDF)
+ * - Thin displacement band near the edge: bevel = min(radius * 0.9, height / 2, 24dp)
+ * - Quadratic falloff: s = (1 - distanceFromEdge / bevel)^2
+ * - Inward edge normal displacement scaled by Refraction (0-60)
+ * - Undistorted, crystal-clear center
+ * - Order: Displace -> Blur -> Saturate (1.5)
+ * - Fill: Tint color alpha = 0.5 * (1 - Transparency / 100) + 0.03 + Darkness overlay = (Darkness / 100) * 0.6
+ * - Edge & bevel: 1dp border (Edge * 0.55), inner top highlight (Edge * 0.7), inner bottom highlight (Edge * 0.25), soft inner glow
+ * - Reflection: 115° diagonal sheen sweep, alpha = Reflection * 0.6, period = 7s / (Animation speed / 100)
+ * - Quality modes: Low (blur only), Medium (blur + refraction + static sheen), High (fully animated)
  */
 @RequiresApi(Build.VERSION_CODES.TIRAMISU)
 object LiquidGlassShader {
@@ -20,84 +26,133 @@ object LiquidGlassShader {
         uniform shader background;
         uniform float2 resolution;
         uniform float cornerRadius;
-        uniform float strength;
+        uniform float refraction;
         uniform float time;
-        uniform float tiltStrength;
-        uniform float lightAngle;
+        uniform float animSpeed;
+        uniform float edgeHighlight;
+        uniform float reflection;
+        uniform float transparency;
+        uniform float tintDarkness;
+        uniform float4 tintColor;
+        uniform float qualityMode;
+        uniform float density;
 
         half4 main(float2 p) {
             float2 size = max(resolution, float2(1.0, 1.0));
-            float2 center = size * 0.5;
-            float2 halfSize = size * 0.5;
-            float r = clamp(
-                cornerRadius,
-                0.0,
-                min(halfSize.x, halfSize.y)
-            );
+            float halfW = size.x * 0.5;
+            float halfH = size.y * 0.5;
+            float2 center = float2(halfW, halfH);
+            float dScale = max(1.0, density);
 
-            // SDF calculation for smooth rounded rectangle
-            float2 q = abs(p - center);
-            float2 d = q - halfSize + float2(r, r);
-            float sdf =
-                length(max(d, float2(0.0, 0.0))) +
-                min(max(d.x, d.y), 0.0) - r;
+            // Clamped corner radius
+            float r = clamp(cornerRadius, 0.0, min(halfW, halfH));
 
-            // Anti-aliased boundary mask
-            float inside = 1.0 - smoothstep(-0.8, 0.8, sdf);
+            // Rounded rectangle signed distance field
+            float2 q = abs(p - center) - float2(halfW - r, halfH - r);
+            float sdf = min(max(q.x, q.y), 0.0) + length(max(q, float2(0.0, 0.0))) - r;
+
+            // Anti-aliased outer boundary mask
+            float inside = 1.0 - smoothstep(-0.8, 0.5, sdf);
             half4 bgOrig = background.eval(p);
             if (inside <= 0.001) {
                 return bgOrig;
             }
 
-            // Normalized coordinates across the liquid dome (-1.0 to 1.0)
-            float2 normCoord = (p - center) / max(halfSize, float2(1.0, 1.0));
-            float distSq = clamp(dot(normCoord, normCoord), 0.0, 1.0);
+            // Inward distance from the glass border
+            float distFromEdge = max(0.0, -sdf);
+
+            // Inward normal calculation
+            float2 d = abs(p - center) - float2(halfW - r, halfH - r);
+            float2 outwardN;
+            if (d.x > 0.0 || d.y > 0.0) {
+                outwardN = normalize(max(d, float2(0.0001, 0.0001))) * sign(p - center);
+            } else {
+                outwardN = (d.x > d.y) ? float2(sign(p.x - center.x), 0.0) : float2(0.0, sign(p.y - center.y));
+            }
+            float2 inwardN = -outwardN;
+
+            // Bevel band width: min(radius * 0.9, height / 2, 24dp)
+            float maxBevelPx = 24.0 * dScale;
+            float bevel = min(r * 0.9, min(halfH, maxBevelPx));
+            bevel = max(bevel, 1.0);
+
+            // 1. REFRACTION DISPLACEMENT:
+            // Quadratic falloff: s = (1 - distanceFromEdge / bevel)^2
+            // Applied only near edge; center stays completely undistorted!
+            float2 shift = float2(0.0, 0.0);
+            if (qualityMode >= 0.5 && distFromEdge < bevel) {
+                float ratio = distFromEdge / bevel;
+                float s = (1.0 - ratio) * (1.0 - ratio);
+                // Pixel shift along inward edge normal, scaled by Refraction (0-60)
+                float shiftMagnitude = refraction * s * (dScale * 0.45);
+                shift = inwardN * shiftMagnitude;
+            }
+
+            // Displace first: Sample background at shifted coordinate
+            float2 uvDisplaced = clamp(p + shift, float2(0.5, 0.5), size - float2(0.5, 0.5));
+            half4 sampledBg = background.eval(uvDisplaced);
+            half3 col = sampledBg.rgb;
+
+            // 2. SATURATE (about 1.5): Enhances vibrancy through crystal glass
+            float luma = dot(col, half3(0.299, 0.587, 0.114));
+            col = mix(half3(luma), col, 1.5);
+
+            // 3. FILL:
+            // Tint color with alpha = 0.5 * (1 - Transparency / 100) + 0.03
+            // Black overlay with alpha = (Darkness / 100) * 0.6
+            float tintAlpha = clamp(0.5 * (1.0 - transparency / 100.0) + 0.03, 0.0, 1.0);
+            float darkAlpha = clamp((tintDarkness / 100.0) * 0.6, 0.0, 1.0);
+            col = mix(col, tintColor.rgb, tintAlpha);
+            col = mix(col, half3(0.0, 0.0, 0.0), darkAlpha);
+
+            // 4. EDGE AND BEVEL:
+            float edgeFactor = clamp(edgeHighlight / 100.0, 0.0, 1.0);
             
-            // Continuous lens dome curvature: z = sqrt(1.0 - distSq)
-            float z = sqrt(1.0 - distSq * 0.72);
-            
-            // Fluid surface normal vector
-            float2 normal = normCoord * (1.15 - z * 0.35);
-            
-            // Border proximity: 0.0 in interior, rising sharply to 1.0 at outer curved edges
-            float borderDist = clamp(-sdf, 0.0, 36.0);
-            float borderProximity = 1.0 - smoothstep(1.0, 22.0, borderDist);
-            
-            // Optical tilt & refraction displacement:
-            // Pronounced tilt near borders, gentle smooth tilt in center
-            float effTilt = clamp(tiltStrength, 0.0, 3.0);
-            float borderTilt = pow(borderProximity, 1.20) * 2.4;
-            float centerTilt = distSq * 0.32;
-            float tiltAmount = (centerTilt + borderTilt) * effTilt * 18.0;
-            float2 offset = normal * tiltAmount;
+            // 1dp border with alpha = Edge * 0.55
+            float border1dp = 1.0 * dScale;
+            float borderAlpha = smoothstep(border1dp, 0.0, distFromEdge) * (edgeFactor * 0.55);
+            col = mix(col, half3(1.0, 1.0, 1.0), borderAlpha);
 
-            // Chromatic dispersion (prismatic color separation on curved glass edges)
-            float disp = 0.022 * effTilt * (borderProximity * 1.35 + distSq * 0.28);
-            float2 uvR = clamp(p - offset * (1.0 + disp), float2(0.0, 0.0), size - float2(1.0, 1.0));
-            float2 uvG = clamp(p - offset, float2(0.0, 0.0), size - float2(1.0, 1.0));
-            float2 uvB = clamp(p - offset * (1.0 - disp), float2(0.0, 0.0), size - float2(1.0, 1.0));
+            // Inner top highlight: alpha = Edge * 0.70
+            float topFactor = max(0.0, inwardN.y);
+            float topHighlight = exp(-distFromEdge / (3.2 * dScale)) * (edgeFactor * 0.70) * topFactor;
+            col += half3(topHighlight);
 
-            half red = background.eval(uvR).r;
-            half green = background.eval(uvG).g;
-            half blue = background.eval(uvB).b;
-            half3 glassCol = half3(red, green, blue);
+            // Inner bottom highlight: alpha = Edge * 0.25
+            float bottomFactor = max(0.0, -inwardN.y);
+            float bottomHighlight = exp(-distFromEdge / (3.2 * dScale)) * (edgeFactor * 0.25) * bottomFactor;
+            col += half3(bottomHighlight);
 
-            // Crystal-clear fluid transparency without dark fills
-            glassCol *= half3(1.01, 1.02, 1.03);
+            // Soft inner glow
+            float innerGlow = exp(-distFromEdge / (8.0 * dScale)) * (edgeFactor * 0.15);
+            col += half3(innerGlow);
 
-            // Specular Fresnel rim light: Directional highlight along perimeter
-            float2 lightDir = float2(cos(lightAngle), sin(lightAngle));
-            float specular = max(0.0, dot(normal, -lightDir));
-            float rimFactor = exp(-abs(sdf) / 12.0);
-            float rimLight = pow(specular, 4.0) * rimFactor * 0.32 * (effTilt * 0.5 + 0.5);
+            // 5. REFLECTION:
+            // Diagonal (115 degrees) soft white sheen band moving across surface
+            // alpha = Reflection * 0.6, one pass every 7s / (animSpeed / 100)
+            if (qualityMode >= 0.5 && reflection > 1.0) {
+                float angleRad = 115.0 * 3.14159265 / 180.0;
+                float2 sheenDir = float2(sin(angleRad), -cos(angleRad));
+                float proj = dot(p - center, sheenDir);
+                float totalSpan = length(size) + 120.0 * dScale;
+                
+                float sheenPhase = 0.35; // Static for Medium quality
+                if (qualityMode > 1.5) { // High quality animated
+                    float speedFactor = max(0.2, animSpeed / 100.0);
+                    float period = 7.0 / speedFactor;
+                    sheenPhase = fract(time / period);
+                }
 
-            // Inner ambient liquid sheen along border contour
-            float innerSheen = exp(-abs(sdf + 2.5) / 3.5) * 0.08 * effTilt;
+                float sheenPos = (sheenPhase - 0.5) * totalSpan;
+                float bandWidth = 26.0 * dScale;
+                float distToSheen = abs(proj - sheenPos);
+                float sheen = smoothstep(bandWidth, 0.0, distToSheen);
+                float sheenAlpha = pow(sheen, 2.0) * ((reflection / 100.0) * 0.6);
+                col += half3(sheenAlpha);
+            }
 
-            glassCol += half3(rimLight + innerSheen, rimLight + innerSheen * 1.06, rimLight + innerSheen * 1.14);
-
-            // Smoothly composite with background preserving complete transparency
-            half4 result = half4(glassCol, bgOrig.a);
+            // Smooth outer anti-aliasing composite
+            half4 result = half4(col, bgOrig.a);
             return mix(bgOrig, result, inside);
         }
     """.trimIndent()

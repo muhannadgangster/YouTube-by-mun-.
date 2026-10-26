@@ -1,6 +1,7 @@
 package com.example.ui.components
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -39,6 +40,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
@@ -84,37 +86,58 @@ fun VideoFeedCard(
     val cardPadding = customization.homeCardPaddingDp.dp
     val cardSpacing = customization.homeCardSpacingDp.dp
 
-    Column(
+    val effectiveRadius = cardRadius.coerceAtLeast(16.dp)
+    val cardShape = RoundedCornerShape(effectiveRadius)
+
+    Box(
         modifier = modifier
             .fillMaxWidth()
             .padding(horizontal = cardPadding, vertical = (cardSpacing / 2).coerceAtLeast(2.dp))
-            .then(
-                if (isGlass) {
-                    Modifier.liquidGlassSurface(
-                        shape = RoundedCornerShape(cardRadius),
+            .clickable { onClick() }
+            .testTag("video_feed_card_${video.id}")
+    ) {
+        // Dedicated Background Liquid Glass Layer for Video Card
+        if (isGlass) {
+            Box(
+                modifier = Modifier
+                    .matchParentSize()
+                    .liquidGlassSurface(
+                        shape = cardShape,
                         config = glassConfig,
                         elevation = 4.dp
                     )
-                } else {
-                    Modifier
-                }
+                    .border(
+                        width = 0.8.dp,
+                        brush = Brush.verticalGradient(
+                            colors = listOf(
+                                Color.White.copy(alpha = 0.45f),
+                                Color.White.copy(alpha = 0.12f),
+                                Color.White.copy(alpha = 0.30f)
+                            )
+                        ),
+                        shape = cardShape
+                    )
             )
-            .clickable { onClick() }
-            .padding(vertical = 8.dp)
-            .testTag("video_feed_card_${video.id}")
-    ) {
-        // 16:9 Thumbnail container
-        Box(
+        }
+
+        // Foreground: 16:9 Thumbnail and Video Info (100% sharp and unwarped)
+        Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 8.dp)
-                .clip(RoundedCornerShape((cardRadius - 2.dp).coerceAtLeast(4.dp)))
-                .aspectRatio(16f / 9f)
+                .padding(vertical = if (isGlass) 6.dp else 4.dp)
         ) {
-            VideoThumbnailView(
-                video = video,
-                modifier = Modifier.matchParentSize()
-            )
+            // 16:9 Thumbnail container
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = if (isGlass) 6.dp else 8.dp)
+                    .clip(RoundedCornerShape(14.dp))
+                    .aspectRatio(16f / 9f)
+            ) {
+                VideoThumbnailView(
+                    video = video,
+                    modifier = Modifier.matchParentSize()
+                )
 
             // Duration badge overlay at bottom right
             Box(
@@ -279,4 +302,5 @@ fun VideoFeedCard(
             }
         }
     }
+}
 }

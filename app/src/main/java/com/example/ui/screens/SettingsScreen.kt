@@ -162,6 +162,17 @@ fun SettingsScreen(
 
     // Liquid Glass state collections
     val lgMaster by settingsManager.liquidGlassMaster.collectAsStateWithLifecycle()
+    val lgQuality by settingsManager.liquidGlassQuality.collectAsStateWithLifecycle()
+    val lgTransparencyInt by settingsManager.liquidGlassTransparencyInt.collectAsStateWithLifecycle()
+    val lgBlurInt by settingsManager.liquidGlassBlurInt.collectAsStateWithLifecycle()
+    val lgRefractionInt by settingsManager.liquidGlassRefractionInt.collectAsStateWithLifecycle()
+    val lgLensMagnifyInt by settingsManager.liquidGlassLensMagnifyInt.collectAsStateWithLifecycle()
+    val lgEdgeHighlightInt by settingsManager.liquidGlassEdgeHighlightInt.collectAsStateWithLifecycle()
+    val lgReflectionInt by settingsManager.liquidGlassReflectionInt.collectAsStateWithLifecycle()
+    val lgDarknessInt by settingsManager.liquidGlassDarknessInt.collectAsStateWithLifecycle()
+    val lgCornerRadiusInt by settingsManager.liquidGlassCornerRadiusInt.collectAsStateWithLifecycle()
+    val lgAnimSpeedInt by settingsManager.liquidGlassAnimSpeedInt.collectAsStateWithLifecycle()
+    val lgTintColorHex by settingsManager.liquidGlassTintColorHex.collectAsStateWithLifecycle()
     val lgIntensity by settingsManager.liquidGlassIntensity.collectAsStateWithLifecycle()
     val lgBlur by settingsManager.liquidGlassBlur.collectAsStateWithLifecycle()
     val lgTransparency by settingsManager.liquidGlassTransparency.collectAsStateWithLifecycle()
@@ -587,242 +598,28 @@ fun SettingsScreen(
             }
 
             // ==========================================
-            // 3. FULL-APP LIQUID GLASS ENGINE CONTROLS
+            // 3. FULL-APP LIQUID GLASS ENGINE (iOS 27 STYLE)
             // ==========================================
-            item { SettingsSectionHeader("Liquid Glass Engine (iOS Glassmorphism)") }
+            item { SettingsSectionHeader("Liquid Glass Studio (iOS Crystal Optics)") }
 
-            item {
-                SettingsSwitchRow(
-                    title = "Master Liquid Glass Engine",
-                    subtitle = if (lgMaster) "Translucent glass surfaces, specular bevels & reflections (Active)" else "Standard YouTube flat theme (Off)",
-                    checked = lgMaster,
-                    onCheckedChange = { isEnabled ->
-                        settingsManager.setLiquidGlassMaster(isEnabled)
-                        Toast.makeText(
-                            context,
-                            if (isEnabled) "Liquid Glass Mode Enabled ✨" else "Liquid Glass Mode Disabled (Conventional UI)",
-                            Toast.LENGTH_SHORT
-                        ).show()
-                    }
-                )
-            }
-
-            if (lgMaster) {
-                // Glass Intensity Slider
-                item {
-                    Column(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = 16.dp, vertical = 6.dp)
-                    ) {
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween
-                        ) {
-                            Text("Glass Depth & Opacity", color = YtTextPrimary, fontSize = 14.sp)
-                            Text("${(lgIntensity * 100).toInt()}%", color = Color(customAccentColorHex), fontSize = 13.sp, fontWeight = FontWeight.Bold)
-                        }
-                        Slider(
-                            value = lgIntensity,
-                            onValueChange = { settingsManager.setLiquidGlassIntensity(it) },
-                            valueRange = 0.2f..1.0f,
-                            colors = SliderDefaults.colors(
-                                thumbColor = Color(customAccentColorHex),
-                                activeTrackColor = Color(customAccentColorHex)
-                            )
-                        )
-                    }
-                }
-
-                // Refraction / Optical Caustics Slider
-                item {
-                    Column(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = 16.dp, vertical = 6.dp)
-                    ) {
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween
-                        ) {
-                            Text("Refraction & Edge Dispersion", color = YtTextPrimary, fontSize = 14.sp)
-                            Text("${(lgRefraction * 100).toInt()}%", color = Color(customAccentColorHex), fontSize = 13.sp, fontWeight = FontWeight.Bold)
-                        }
-                        Slider(
-                            value = lgRefraction,
-                            onValueChange = { settingsManager.setLiquidGlassRefraction(it) },
-                            valueRange = 0.1f..1.0f,
-                            colors = SliderDefaults.colors(
-                                thumbColor = Color(customAccentColorHex),
-                                activeTrackColor = Color(customAccentColorHex)
-                            )
-                        )
-                    }
-                }
-
-                // Optical Tilt Control ("ٹلٹ")
-                item {
-                    Column(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = 16.dp, vertical = 6.dp)
-                    ) {
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween
-                        ) {
-                            Column(modifier = Modifier.weight(1f)) {
-                                Text("Optical Tilt Strength (ٹلٹ)", color = YtTextPrimary, fontSize = 14.sp, fontWeight = FontWeight.Medium)
-                                Text("Curved lens displacement: high at borders, gentle in center", color = YtTextSecondary, fontSize = 11.sp)
-                            }
-                            Text("${(lgOpticalTilt * 100).toInt()}%", color = Color(customAccentColorHex), fontSize = 13.sp, fontWeight = FontWeight.Bold)
-                        }
-                        Slider(
-                            value = lgOpticalTilt,
-                            onValueChange = { settingsManager.setOpticalTiltStrength(it) },
-                            valueRange = 0.0f..2.5f,
-                            colors = SliderDefaults.colors(
-                                thumbColor = Color(customAccentColorHex),
-                                activeTrackColor = Color(customAccentColorHex)
-                            )
-                        )
-                    }
-                }
-
-                // Animation Smoothness & Physics Mode ("سمود اینیمیشن")
-                item {
-                    Column(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = 16.dp, vertical = 6.dp)
-                    ) {
-                        Text("Animation Smoothness (سمود اینیمیشن)", color = YtTextPrimary, fontSize = 14.sp, fontWeight = FontWeight.Medium)
-                        Spacer(modifier = Modifier.height(4.dp))
-                        Text("Configurable fluid spring damping and speed for tabs & indicators", color = YtTextSecondary, fontSize = 11.sp)
-                        Spacer(modifier = Modifier.height(8.dp))
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.spacedBy(6.dp)
-                        ) {
-                            listOf("Silky Smooth", "Bouncy Spring", "Cinematic Slow", "Instant Snappy").forEach { mode ->
-                                val isSelected = lgAnimSmoothness == mode
-                                val accentCol = Color(customAccentColorHex)
-                                Box(
-                                    modifier = Modifier
-                                        .weight(1f)
-                                        .clip(RoundedCornerShape(12.dp))
-                                        .background(if (isSelected) accentCol else YtSurfaceDark)
-                                        .border(
-                                            width = 1.dp,
-                                            color = if (isSelected) accentCol else YtBorder,
-                                            shape = RoundedCornerShape(12.dp)
-                                        )
-                                        .clickable { settingsManager.setAnimationSmoothnessMode(mode) }
-                                        .padding(vertical = 8.dp, horizontal = 4.dp),
-                                    contentAlignment = Alignment.Center
-                                ) {
-                                    Text(
-                                        text = mode,
-                                        fontSize = 10.sp,
-                                        fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
-                                        color = if (isSelected) Color.White else YtTextSecondary,
-                                        maxLines = 1,
-                                        textAlign = TextAlign.Center
-                                    )
-                                }
-                            }
-                        }
-                    }
-                }
-
-                // Directional Light Angle Slider ("لائٹ ایڈجسٹمنٹ")
-                item {
-                    Column(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = 16.dp, vertical = 6.dp)
-                    ) {
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween
-                        ) {
-                            Text("Directional Light Angle", color = YtTextPrimary, fontSize = 14.sp)
-                            Text("${lgLightAngle.toInt()}°", color = Color(customAccentColorHex), fontSize = 13.sp, fontWeight = FontWeight.Bold)
-                        }
-                        Slider(
-                            value = lgLightAngle,
-                            onValueChange = { settingsManager.setLiquidGlassLightAngle(it) },
-                            valueRange = 0f..360f,
-                            colors = SliderDefaults.colors(
-                                thumbColor = Color(customAccentColorHex),
-                                activeTrackColor = Color(customAccentColorHex)
-                            )
-                        )
-                    }
-                }
-
-                // Transparency Slider
-                item {
-                    Column(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = 16.dp, vertical = 6.dp)
-                    ) {
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween
-                        ) {
-                            Text("Transparency Level", color = YtTextPrimary, fontSize = 14.sp)
-                            Text("${(lgTransparency * 100).toInt()}%", color = Color(customAccentColorHex), fontSize = 13.sp, fontWeight = FontWeight.Bold)
-                        }
-                        Slider(
-                            value = lgTransparency,
-                            onValueChange = { settingsManager.setLiquidGlassTransparency(it) },
-                            valueRange = 0.3f..0.95f,
-                            colors = SliderDefaults.colors(
-                                thumbColor = Color(customAccentColorHex),
-                                activeTrackColor = Color(customAccentColorHex)
-                            )
-                        )
-                    }
-                }
-
-                // Specular highlight toggle
-                item {
-                    SettingsSwitchRow(
-                        title = "Specular Bevel Highlights",
-                        subtitle = "Curved optical lens reflections on top and left borders",
-                        checked = lgSpecular,
-                        onCheckedChange = { settingsManager.setLiquidGlassSpecular(it) }
-                    )
-                }
-
-                // Border Thickness Slider
-                item {
-                    Column(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = 16.dp, vertical = 6.dp)
-                    ) {
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween
-                        ) {
-                            Text("Luminous Border Thickness", color = YtTextPrimary, fontSize = 14.sp)
-                            Text("${String.format("%.1f", lgBorderThickness)} dp", color = Color(customAccentColorHex), fontSize = 13.sp, fontWeight = FontWeight.Bold)
-                        }
-                        Slider(
-                            value = lgBorderThickness,
-                            onValueChange = { settingsManager.setLiquidGlassBorderThickness(it) },
-                            valueRange = 0.6f..3.0f,
-                            colors = SliderDefaults.colors(
-                                thumbColor = Color(customAccentColorHex),
-                                activeTrackColor = Color(customAccentColorHex)
-                            )
-                        )
-                    }
-                }
-            }
+            liquidGlassStudioItems(
+                settingsManager = settingsManager,
+                glassConfig = glassConfig,
+                accentColor = Color(customAccentColorHex),
+                context = context,
+                lgMaster = lgMaster,
+                lgQuality = lgQuality,
+                lgTransparency = lgTransparencyInt,
+                lgBlur = lgBlurInt,
+                lgRefraction = lgRefractionInt,
+                lgLensMagnify = lgLensMagnifyInt,
+                lgEdgeHighlight = lgEdgeHighlightInt,
+                lgReflection = lgReflectionInt,
+                lgDarkness = lgDarknessInt,
+                lgCornerRadius = lgCornerRadiusInt,
+                lgAnimSpeed = lgAnimSpeedInt,
+                lgTintColorHex = lgTintColorHex
+            )
 
             // ==========================================
             // 4. NEON LIGHTS SYSTEM CONTROLS

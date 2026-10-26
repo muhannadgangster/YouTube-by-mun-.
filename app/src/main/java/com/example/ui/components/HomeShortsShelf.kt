@@ -1,6 +1,7 @@
 package com.example.ui.components
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -62,86 +63,114 @@ fun HomeShortsShelf(
     val accentColor = LocalAppAccentColor.current
     val glassConfig = LocalLiquidGlassConfig.current
 
-    Column(
+    val shelfShape = RoundedCornerShape(20.dp)
+
+    Box(
         modifier = modifier
             .fillMaxWidth()
-            .then(
-                if (glassConfig.isEnabled || glassConfig.neonEnabled) {
-                    Modifier.liquidGlassSurface(
-                        shape = RoundedCornerShape(16.dp),
-                        config = glassConfig,
-                        elevation = 4.dp
-                    )
-                } else {
-                    Modifier.background(Color(0x33000000))
-                }
-            )
-            .padding(vertical = 12.dp)
             .testTag("home_shorts_shelf")
     ) {
-        // Shelf Header: Shorts S-icon / Logo + "Shorts" title
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 14.dp, vertical = 8.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            // Shorts Icon Badge with customizable accent color
+        // Dedicated Background Liquid Glass Layer for Shorts Shelf
+        if (glassConfig.isEnabled) {
             Box(
                 modifier = Modifier
-                    .size(26.dp)
-                    .clip(RoundedCornerShape(6.dp))
-                    .background(accentColor),
-                contentAlignment = Alignment.Center
+                    .matchParentSize()
+                    .liquidGlassSurface(
+                        shape = shelfShape,
+                        config = glassConfig,
+                        accentColor = accentColor,
+                        elevation = 4.dp
+                    )
+                    .border(
+                        width = 0.8.dp,
+                        brush = Brush.verticalGradient(
+                            colors = listOf(
+                                Color.White.copy(alpha = 0.50f),
+                                Color.White.copy(alpha = 0.12f),
+                                Color.White.copy(alpha = 0.35f)
+                            )
+                        ),
+                        shape = shelfShape
+                    )
+            )
+        } else {
+            Box(
+                modifier = Modifier
+                    .matchParentSize()
+                    .clip(shelfShape)
+                    .background(Color(0x33000000))
+            )
+        }
+
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(vertical = 12.dp)
+        ) {
+            // Shelf Header: Shorts S-icon / Logo + "Shorts" title
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 14.dp, vertical = 8.dp),
+                verticalAlignment = Alignment.CenterVertically
             ) {
+                // Shorts Icon Badge with customizable accent color
+                Box(
+                    modifier = Modifier
+                        .size(26.dp)
+                        .clip(RoundedCornerShape(6.dp))
+                        .background(accentColor),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        text = "⚡",
+                        fontSize = 14.sp,
+                        color = Color.White,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+
+                Spacer(modifier = Modifier.width(8.dp))
+
                 Text(
-                    text = "⚡",
-                    fontSize = 14.sp,
-                    color = Color.White,
+                    text = "Shorts",
+                    color = YtTextPrimary,
+                    fontSize = 19.sp,
+                    fontWeight = FontWeight.Bold
+                )
+
+                Spacer(modifier = Modifier.width(6.dp))
+
+                Text(
+                    text = "›",
+                    color = YtTextSecondary,
+                    fontSize = 20.sp,
                     fontWeight = FontWeight.Bold
                 )
             }
 
-            Spacer(modifier = Modifier.width(8.dp))
+            // Configurable Grid Layout (2, 4, 6, or 8 cards arranged in responsive pairs)
+            val countToDisplay = if (gridCount in listOf(2, 4, 6, 8)) gridCount else 4
+            val displayShorts = shortsList.take(countToDisplay)
+            displayShorts.chunked(2).forEachIndexed { rowIndex, pair ->
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 12.dp, vertical = 5.dp),
+                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    pair.forEach { shortItem ->
+                        ShortGridCard(
+                            short = shortItem,
+                            onClick = { onShortClick(shortItem) },
+                            modifier = Modifier.weight(1f)
+                        )
+                    }
 
-            Text(
-                text = "Shorts",
-                color = YtTextPrimary,
-                fontSize = 19.sp,
-                fontWeight = FontWeight.Bold
-            )
-
-            Spacer(modifier = Modifier.width(6.dp))
-
-            Text(
-                text = "›",
-                color = YtTextSecondary,
-                fontSize = 20.sp,
-                fontWeight = FontWeight.Bold
-            )
-        }
-
-        // Configurable Grid Layout (2, 4, 6, or 8 cards arranged in responsive pairs)
-        val countToDisplay = if (gridCount in listOf(2, 4, 6, 8)) gridCount else 4
-        val displayShorts = shortsList.take(countToDisplay)
-        displayShorts.chunked(2).forEachIndexed { rowIndex, pair ->
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 12.dp, vertical = 5.dp),
-                horizontalArrangement = Arrangement.spacedBy(10.dp)
-            ) {
-                pair.forEach { shortItem ->
-                    ShortGridCard(
-                        short = shortItem,
-                        onClick = { onShortClick(shortItem) },
-                        modifier = Modifier.weight(1f)
-                    )
-                }
-
-                // Balance row if odd count
-                if (pair.size == 1) {
-                    Spacer(modifier = Modifier.weight(1f))
+                    // Balance row if odd count
+                    if (pair.size == 1) {
+                        Spacer(modifier = Modifier.weight(1f))
+                    }
                 }
             }
         }
@@ -149,7 +178,7 @@ fun HomeShortsShelf(
 }
 
 /**
- * Individual 9:16 Short Card in the 2-Column Grid
+ * Individual 9:16 Short Card with Outer Liquid Glass Border & Bevel
  */
 @Composable
 private fun ShortGridCard(
@@ -158,32 +187,60 @@ private fun ShortGridCard(
     modifier: Modifier = Modifier
 ) {
     val glassConfig = LocalLiquidGlassConfig.current
+    val isGlass = glassConfig.isEnabled
+    val cardShape = RoundedCornerShape(16.dp)
 
     Box(
         modifier = modifier
             .aspectRatio(9f / 16f)
-            .then(
-                if (glassConfig.isEnabled || glassConfig.neonEnabled) {
-                    Modifier.liquidGlassSurface(
-                        shape = RoundedCornerShape(14.dp),
-                        config = glassConfig,
-                        elevation = 4.dp
-                    )
-                } else {
-                    Modifier
-                        .clip(RoundedCornerShape(12.dp))
-                        .background(YtSurfaceDark)
-                }
-            )
             .clickable { onClick() }
             .testTag("short_card_${short.id}")
     ) {
-        // 9:16 Vertical Video Thumbnail
-        VideoThumbnailView(
-            video = short,
-            contentScale = ContentScale.Crop,
-            modifier = Modifier.fillMaxSize()
-        )
+        // Outer liquid glass frame behind and around thumbnail borders
+        if (isGlass) {
+            Box(
+                modifier = Modifier
+                    .matchParentSize()
+                    .liquidGlassSurface(
+                        shape = cardShape,
+                        config = glassConfig,
+                        elevation = 4.dp
+                    )
+                    .border(
+                        width = 1.dp,
+                        brush = Brush.verticalGradient(
+                            colors = listOf(
+                                Color.White.copy(alpha = 0.65f),
+                                Color.White.copy(alpha = 0.15f),
+                                Color.White.copy(alpha = 0.45f)
+                            )
+                        ),
+                        shape = cardShape
+                    )
+            )
+        } else {
+            Box(
+                modifier = Modifier
+                    .matchParentSize()
+                    .clip(cardShape)
+                    .background(YtSurfaceDark)
+                    .border(0.75.dp, Color.White.copy(alpha = 0.15f), cardShape)
+            )
+        }
+
+        // Inner Video Thumbnail with rounded padding, leaving curved glass frame and bevel visible around it
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(if (isGlass) 3.5.dp else 0.dp)
+                .clip(RoundedCornerShape(13.dp))
+        ) {
+            // 9:16 Vertical Video Thumbnail
+            VideoThumbnailView(
+                video = short,
+                contentScale = ContentScale.Crop,
+                modifier = Modifier.fillMaxSize()
+            )
 
         // Bottom dark gradient scrim for readable title overlay
         Box(
@@ -246,4 +303,5 @@ private fun ShortGridCard(
             )
         }
     }
+}
 }

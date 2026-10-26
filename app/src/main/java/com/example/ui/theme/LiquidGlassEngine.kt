@@ -1,10 +1,16 @@
 package com.example.ui.theme
 
+import android.graphics.RenderEffect as AndroidRenderEffect
+import android.graphics.RuntimeShader
+import android.graphics.Shader
+import android.os.Build
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -19,71 +25,24 @@ import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
-import androidx.compose.ui.graphics.BlendMode
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.graphics.asComposeRenderEffect
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
-import android.graphics.RenderEffect as AndroidRenderEffect
-import android.graphics.RuntimeShader
-import android.graphics.Shader
-import android.os.Build
-import androidx.compose.ui.graphics.asComposeRenderEffect
-import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.animation.core.Spring
-import androidx.compose.animation.core.spring
-
 import kotlin.math.cos
 import kotlin.math.sin
-
-/**
- * Android Graphics Shading Language (AGSL) Real-Time Optical Liquid Glass Shader
- * Runs directly on GPU for real-time background pixel refraction and chromatic dispersion.
- */
-private const val AGSL_LIQUID_GLASS = """
-    uniform shader uContent;
-    uniform float2 uResolution;
-    uniform float uRefraction;
-    uniform float uCurvature;
-    uniform float uDispersion;
-    
-    half4 main(float2 fragCoord) {
-        if (uResolution.x <= 1.0 || uResolution.y <= 1.0) {
-            return uContent.eval(fragCoord);
-        }
-        float2 uv = fragCoord / uResolution;
-        float2 p = (uv - 0.5) * 2.0;
-        float r = length(p);
-        
-        float edgeDistort = pow(clamp(r, 0.0, 1.0), uCurvature) * (uRefraction * 0.05);
-        float2 offset = normalize(p + 0.0001) * edgeDistort;
-        
-        float disp = uDispersion * 0.008;
-        float2 uvR = clamp(uv - offset * (1.0 + disp), 0.0, 1.0);
-        float2 uvG = clamp(uv - offset, 0.0, 1.0);
-        float2 uvB = clamp(uv - offset * (1.0 - disp), 0.0, 1.0);
-        
-        half4 cR = uContent.eval(uvR * uResolution);
-        half4 cG = uContent.eval(uvG * uResolution);
-        half4 cB = uContent.eval(uvB * uResolution);
-        
-        float fresnel = pow(clamp(r, 0.0, 1.0), 3.2) * (uRefraction * 0.25);
-        
-        half4 col = half4(cR.r, cG.g, cB.b, (cR.a + cG.a + cB.a) / 3.0);
-        col.rgb += half3(fresnel, fresnel, fresnel);
-        return col;
-    }
-"""
 
 /**
  * Spring-Physics animation specifications for iOS-quality fluid transitions
  */
 object LiquidPhysics {
     val NavigationSpring = spring<Float>(
-        dampingRatio = Spring.DampingRatioLowBouncy,
+        dampingRatio = 0.68f, // Slight overshoot
         stiffness = Spring.StiffnessMediumLow
     )
     val PanelSpring = spring<Float>(
@@ -95,58 +54,71 @@ object LiquidPhysics {
         stiffness = 450f
     )
     val IndicatorSpring = spring<Float>(
-        dampingRatio = Spring.DampingRatioMediumBouncy,
-        stiffness = Spring.StiffnessMedium
+        dampingRatio = 0.68f,
+        stiffness = Spring.StiffnessMediumLow
     )
 }
 
 /**
- * Full-app Liquid Glass & Neon styling configuration state
- * Contains all real, adjustable, persistent parameters required by the Global Liquid Glass system.
+ * Full-app Liquid Glass styling configuration matching exact web prototype specification:
+ * - Transparency (0..100, default 65)
+ * - Background Blur (0..30, default 8)
+ * - Refraction (0..60, default 28)
+ * - Lens Magnify (0..100, default 60)
+ * - Edge Highlight & Bevel (0..100, default 60)
+ * - Reflection (0..100, default 40)
+ * - Tint Darkness (0..100, default 25)
+ * - Corner Radius (10..32 dp, default 32)
+ * - Animation Speed (20..200, default 100)
+ * - Quality (Low / Medium / High)
  */
 @Immutable
 data class LiquidGlassStyleConfig(
     val isEnabled: Boolean = true,
-    // Transparency / Opacity (0.1 .. 0.95)
-    val transparency: Float = 0.70f,
-    // Blur Radius (0 .. 50). If 0, blur is completely off.
-    val blurRadius: Float = 24f,
-    // Corner Radius (0 .. 32 dp)
-    val cornerRadiusDp: Float = 16f,
-    // Refraction Height (0.0 .. 1.0)
-    val refractionHeight: Float = 0.65f,
-    // Refraction Amount / Intensity (0.0 .. 1.0). If 0, refraction stops.
-    val refractionAmount: Float = 0.65f,
-    // Layer Refraction / Layer Separation (dual-layer optical separation)
-    val layerRefraction: Boolean = true,
-    // Enable Depth (if false, 3D elevation and depth gradients are removed)
-    val depthEnabled: Boolean = true,
-    // Vibrancy / Saturation (0.0 .. 1.0)
-    val vibrancy: Float = 0.85f,
-    // Edge Highlights (0.0 .. 1.0). If 0, bevel sheen and rim highlight are removed.
-    val edgeHighlights: Float = 0.80f,
-    // Glass Thickness / Bevel border width in dp (0.5 .. 3.5 dp)
-    val glassThickness: Float = 1.0f,
-    // Reflection Intensity (0.0 .. 1.0). Controls surface reflection and video light spill.
-    val reflectionIntensity: Float = 0.75f,
-    // Glass Tint & Color (ARGB Hex). Default neutral smoke crystal.
+    val quality: String = "High", // "Low", "Medium", "High"
+    val transparency: Float = 65f, // 0..100 (Default 65)
+    val blur: Float = 8f, // 0..30 (Default 8)
+    val refraction: Float = 28f, // 0..60 (Default 28)
+    val lensMagnify: Float = 60f, // 0..100 (Default 60)
+    val edgeHighlight: Float = 60f, // 0..100 (Default 60)
+    val reflection: Float = 40f, // 0..100 (Default 40)
+    val tintDarkness: Float = 25f, // 0..100 (Default 25)
+    val cornerRadiusDp: Float = 32f, // 10..32 (Default 32)
+    val animSpeed: Float = 100f, // 20..200 (Default 100)
     val glassTintColorHex: Long = 0x35141928L,
-    // Shadow / Elevation (0 .. 16 dp).
-    val shadowElevationDp: Float = 6f,
-    // Animation Intensity (0.0 .. 1.0)
-    val animationIntensity: Float = 1.0f,
-    // Glass Quality / Performance Mode: "Quality", "Balanced", "Battery Saver"
-    val performanceMode: String = "Quality",
-    // Compatibility helpers
-    val glassIntensity: Float = 0.85f,
-    val refractionIntensity: Float = 0.65f,
-    val specularHighlight: Boolean = true,
-    val borderThicknessDp: Float = 1.0f,
     val isDarkGlass: Boolean = true,
-    val isFrosted: Boolean = true,
-    // Directional Light Angle (0° .. 360°, where 315° is Top-Left)
+
+    // Backward-compatibility properties with mathematical bridges:
+    val blurRadius: Float = blur,
+    val refractionAmount: Float = refraction / 60f,
+    val edgeHighlights: Float = edgeHighlight / 100f,
+    val reflectionIntensity: Float = reflection / 100f,
+    val opticalTiltStrength: Float = refraction / 28f,
+    val glassThickness: Float = 1.0f,
+    val depthEnabled: Boolean = true,
+    val vibrancy: Float = 0.85f,
+    val shadowElevationDp: Float = 6f,
+    val animationIntensity: Float = animSpeed / 100f,
+    val performanceMode: String = quality,
+    val glassIntensity: Float = (100f - transparency) / 100f,
+    val refractionIntensity: Float = refraction / 60f,
+    val specularHighlight: Boolean = edgeHighlight > 0f,
+    val borderThicknessDp: Float = 1.0f,
+    val isFrosted: Boolean = blur > 0f,
     val lightAngleDegrees: Float = 315f,
-    // 3D Liquid Drop Central Reflection (Disabled to remove central white spot artifact)
+    val opticalShaderEnabled: Boolean = true,
+    val springPhysicsEnabled: Boolean = true,
+    val lensMagnification: Float = 1.0f + (lensMagnify / 35f),
+    val animationSmoothnessMode: String = "Silky Smooth",
+
+    // Neon Lights compatibility
+    val neonEnabled: Boolean = false,
+    val neonColorHex: Long = 0xFF00E5FFL,
+    val neonIntensity: Float = 0.85f,
+    val neonAnimated: Boolean = false,
+    val neonAnimationSpeed: Float = 1.0f,
+
+    // Drop reflection & extra compatibility
     val liquidDropReflectionEnabled: Boolean = false,
     val dropReflectionSize: Float = 0.55f,
     val dropReflectionIntensity: Float = 0.75f,
@@ -154,26 +126,15 @@ data class LiquidGlassStyleConfig(
     val dropReflectionY: Float = 0.35f,
     val dropReflectionSoftness: Float = 0.65f,
     val dropSecondaryHighlight: Float = 0.45f,
-    // Optical Tilt Control ("ٹلٹ"): Pronounced border displacement, smooth center curvature
-    val opticalTiltStrength: Float = 0.85f,
-    // Animation Smoothness & Physics ("سمود اینیمیشن"): "Silky Smooth", "Bouncy Spring", "Cinematic Slow", "Instant Snappy"
-    val animationSmoothnessMode: String = "Silky Smooth",
-    // 3D Lens Geometry & Curvature
     val convexCurvatureIntensity: Float = 0.70f,
     val bevelStrength: Float = 0.80f,
-    val glassSmoothness: Float = 0.85f,
     val depthIntensity: Float = 0.75f,
-    // Optical GPU Shader & Edge Refraction
-    val opticalShaderEnabled: Boolean = true,
+    val glassSmoothness: Float = 0.85f,
     val edgeCurvaturePower: Float = 2.5f,
     val chromaticDispersion: Float = 0.45f,
-    val springPhysicsEnabled: Boolean = true,
-    // Neon Lights
-    val neonEnabled: Boolean = false,
-    val neonColorHex: Long = 0xFF00E5FFL,
-    val neonIntensity: Float = 0.85f,
-    val neonAnimated: Boolean = false,
-    val neonAnimationSpeed: Float = 1.0f,
+    val layerRefraction: Boolean = true,
+    val refractionHeight: Float = 0.65f,
+
     // Subscribe Button Customization
     val subscribeGlassEnabled: Boolean = true,
     val subscribeGlassTintHex: Long = 0xFFFFFFFFL,
@@ -187,10 +148,17 @@ data class LiquidGlassStyleConfig(
 val LocalLiquidGlassConfig = staticCompositionLocalOf { LiquidGlassStyleConfig() }
 
 /**
- * Dimensional, physically-inspired iOS optical liquid glass surface modifier:
- * - Every single parameter genuinely affects visual rendering in real time
- * - Respects master switch (bypasses completely when disabled)
- * - Supports depth, directional edge lighting, liquid-drop central reflection, blur, refraction, and custom tint
+ * Dimensional, physically-accurate iOS Liquid Glass Surface Modifier:
+ * 
+ * 1. Master Switch: Returns this when disabled (normal solid UI).
+ * 2. Order of operations: Displace -> Blur -> Saturate (1.5) -> Tint Fill + Darkness -> Bevel / Sheen.
+ * 3. Fill: tint color alpha = 0.5 * (1 - Transparency/100) + 0.03, black overlay alpha = Darkness/100 * 0.6.
+ * 4. Edge and Bevel: 1dp border (Edge * 0.55), inner top highlight (Edge * 0.7), inner bottom highlight (Edge * 0.25), soft inner glow, soft drop shadow.
+ * 5. Reflection: 115° diagonal soft white sheen band moving across surface, alpha = Reflection * 0.6, period = 7s / (animSpeed / 100).
+ * 6. Quality Modes:
+ *    - Low: Blur only (no refraction, no sheen animation)
+ *    - Medium: Blur + refraction, static sheen
+ *    - High: Everything animated in real time
  */
 fun Modifier.liquidGlassSurface(
     shape: Shape,
@@ -199,48 +167,53 @@ fun Modifier.liquidGlassSurface(
     elevation: Dp = 6.dp,
     interactiveGlow: Boolean = false
 ): Modifier {
-    // 1. MASTER SWITCH: When disabled and neon is not active, return unmodified
+    // 1. MASTER SWITCH: When disabled, return clean, standard UI without glass overhead
     if (!config.isEnabled && !config.neonEnabled) {
         return this
     }
 
     val isDark = config.isDarkGlass
+    val isQualityLow = config.quality.equals("Low", ignoreCase = true)
+    val isQualityMedium = config.quality.equals("Medium", ignoreCase = true)
+    val isQualityHigh = !isQualityLow && !isQualityMedium
 
-    // 2. TRANSPARENCY & TINT: Fluid crystal-clear optical glass base
-    val baseAlpha = ((1f - config.transparency.coerceIn(0.1f, 0.98f)) * 0.25f).coerceIn(0.02f, 0.28f)
+    // Quality integer: 0 = Low, 1 = Medium, 2 = High
+    val qualityCode = when {
+        isQualityLow -> 0f
+        isQualityMedium -> 1f
+        else -> 2f
+    }
+
+    // 2. FILL FORMULA:
+    // Tint color alpha = 0.5 * (1 - Transparency/100) + 0.03
+    val tintAlpha = (0.5f * (1f - config.transparency.coerceIn(0f, 100f) / 100f) + 0.03f).coerceIn(0.02f, 0.98f)
+    // Black overlay alpha = (Darkness / 100) * 0.6
+    val darkAlpha = ((config.tintDarkness.coerceIn(0f, 100f) / 100f) * 0.6f).coerceIn(0f, 0.60f)
+
     val customTintColor = Color(config.glassTintColorHex)
-    val baseGlassColor = if (config.glassTintColorHex != 0x35141928L && customTintColor.alpha > 0.01f) {
-        customTintColor.copy(alpha = baseAlpha)
+    val baseTintColor = if (customTintColor.alpha > 0.01f && config.glassTintColorHex != 0L) {
+        customTintColor.copy(alpha = tintAlpha)
     } else if (isDark) {
-        Color(0xFF0F172A).copy(alpha = baseAlpha)
+        Color(0xFF141928).copy(alpha = tintAlpha)
     } else {
-        Color(0xFFFFFFFF).copy(alpha = baseAlpha)
+        Color(0xFFFFFFFF).copy(alpha = tintAlpha)
     }
+    val darknessColor = Color.Black.copy(alpha = darkAlpha)
 
-    // 3. DEPTH & SHADOW: If depth is disabled, shadow elevation is strictly 0
-    val effectiveElevationDp = if (config.isEnabled && config.depthEnabled) {
-        (config.shadowElevationDp.takeIf { it > 0f } ?: elevation.value).coerceIn(0f, 16f)
-    } else 0f
+    // 3. EDGE HIGHLIGHT & BEVEL FORMULA:
+    val edgeFactor = (config.edgeHighlight.coerceIn(0f, 100f) / 100f)
+    val border1dpAlpha = (edgeFactor * 0.55f).coerceIn(0.05f, 0.85f)
+    val innerTopAlpha = (edgeFactor * 0.70f).coerceIn(0f, 0.95f)
+    val innerBottomAlpha = (edgeFactor * 0.25f).coerceIn(0f, 0.50f)
+    val innerGlowAlpha = (edgeFactor * 0.15f).coerceIn(0f, 0.35f)
 
-    val shadowElevation = effectiveElevationDp.dp
+    // 4. REFLECTION FORMULA:
+    val reflectionAlpha = ((config.reflection.coerceIn(0f, 100f) / 100f) * 0.6f).coerceIn(0f, 0.60f)
 
-    // 4. BORDER THICKNESS / BEVEL
-    val effectiveBorderWidth = if (config.neonEnabled) {
-        1.2.dp
-    } else {
-        (config.glassThickness * config.bevelStrength).coerceIn(0.5f, 3.5f).dp
-    }
-
-    // 5. DIRECTIONAL LIGHTING CALCULATION
-    val lightRad = Math.toRadians(config.lightAngleDegrees.toDouble())
-    val lightDirX = cos(lightRad).toFloat()
-    val lightDirY = sin(lightRad).toFloat()
-
-    // Edge illumination weights (0f .. 1f) based on light direction
-    val topLightFactor = (-lightDirY).coerceIn(0f, 1f)
-    val bottomLightFactor = (lightDirY).coerceIn(0f, 1f)
-    val leftLightFactor = (-lightDirX).coerceIn(0f, 1f)
-    val rightLightFactor = (lightDirX).coerceIn(0f, 1f)
+    // 5. SHADOW & DEPTH
+    val shadowElevation = if (config.depthEnabled) {
+        (config.shadowElevationDp.takeIf { it > 0f } ?: elevation.value).coerceIn(0f, 16f).dp
+    } else 0.dp
 
     return this
         .then(
@@ -249,208 +222,146 @@ fun Modifier.liquidGlassSurface(
                     elevation = shadowElevation,
                     shape = shape,
                     clip = false,
-                    ambientColor = if (config.neonEnabled) Color(config.neonColorHex).copy(alpha = 0.35f) else Color(0x28000000),
-                    spotColor = if (config.neonEnabled) Color(config.neonColorHex).copy(alpha = 0.45f) else Color(0x40000000)
+                    ambientColor = if (config.neonEnabled) Color(config.neonColorHex).copy(alpha = 0.35f) else Color(0x30000000),
+                    spotColor = if (config.neonEnabled) Color(config.neonColorHex).copy(alpha = 0.45f) else Color(0x50000000)
                 )
             } else Modifier
         )
+        // 6. REAL-TIME GPU DISPLACEMENT & BLUR via AGSL (API 33+)
         .then(
-            if (config.isEnabled && config.opticalShaderEnabled && Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            if (config.isEnabled && Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
                 Modifier.graphicsLayer {
+                    if (size.width < 12f || size.height < 12f) {
+                        renderEffect = null
+                        return@graphicsLayer
+                    }
                     try {
                         val shader = com.mytube.ui.glass.LiquidGlassShader.obtain()
                         shader.setFloatUniform("resolution", size.width, size.height)
                         shader.setFloatUniform("cornerRadius", config.cornerRadiusDp * density)
-                        shader.setFloatUniform("strength", config.refractionAmount * 1.6f)
-                        shader.setFloatUniform("time", (System.currentTimeMillis() % 100000L) / 1000f)
-                        shader.setFloatUniform("tiltStrength", config.opticalTiltStrength)
-                        val lightRad = Math.toRadians(config.lightAngleDegrees.toDouble()).toFloat()
-                        shader.setFloatUniform("lightAngle", lightRad)
-                        renderEffect = AndroidRenderEffect
-                            .createRuntimeShaderEffect(shader, "background")
-                            .asComposeRenderEffect()
-                    } catch (_: Exception) {}
+                        shader.setFloatUniform("refraction", if (isQualityLow) 0f else config.refraction)
+                        shader.setFloatUniform("time", (System.currentTimeMillis() % 1000000L) / 1000f)
+                        shader.setFloatUniform("animSpeed", config.animSpeed)
+                        shader.setFloatUniform("edgeHighlight", config.edgeHighlight)
+                        shader.setFloatUniform("reflection", config.reflection)
+                        shader.setFloatUniform("transparency", config.transparency)
+                        shader.setFloatUniform("tintDarkness", config.tintDarkness)
+                        
+                        val tint = customTintColor
+                        shader.setFloatUniform("tintColor", tint.red, tint.green, tint.blue, 1.0f)
+                        shader.setFloatUniform("qualityMode", qualityCode)
+                        shader.setFloatUniform("density", density)
+
+                        val shaderEffect = AndroidRenderEffect.createRuntimeShaderEffect(shader, "background")
+
+                        // Chained hardware blur if blur > 0
+                        val effectiveBlurPx = (config.blur * density * 0.45f).coerceIn(0f, 40f)
+                        renderEffect = if (effectiveBlurPx > 0.5f && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                            val blurEffect = AndroidRenderEffect.createBlurEffect(
+                                effectiveBlurPx,
+                                effectiveBlurPx,
+                                Shader.TileMode.CLAMP
+                            )
+                            AndroidRenderEffect.createChainEffect(blurEffect, shaderEffect).asComposeRenderEffect()
+                        } else {
+                            shaderEffect.asComposeRenderEffect()
+                        }
+                    } catch (_: Exception) {
+                        renderEffect = null
+                    }
                 }
             } else Modifier
         )
         .clip(shape)
         .drawBehind {
-            // A. Base translucent liquid glass material
-            drawRect(color = baseGlassColor)
+            // A. Base translucent liquid glass tint fill
+            drawRect(color = baseTintColor)
 
-            // A2. FROSTED DIFFUSION / BACKGROUND BLUR EFFECT (Diffuses background pixels under glass without touching foreground)
-            if (config.isEnabled && config.blurRadius > 0.5f) {
-                val blurFactor = (config.blurRadius / 50f).coerceIn(0.05f, 1f)
-                val diffusionBrush = Brush.radialGradient(
-                    colors = listOf(
-                        Color.White.copy(alpha = 0.08f * blurFactor * config.vibrancy),
-                        Color(0xFF38BDF8).copy(alpha = 0.04f * blurFactor * config.vibrancy),
-                        Color.Transparent
-                    ),
-                    center = Offset(size.width / 2f, size.height / 2f),
-                    radius = (size.width.coerceAtLeast(size.height)) * 0.75f
-                )
-                drawRect(brush = diffusionBrush)
+            // B. Darkness overlay
+            if (darkAlpha > 0.01f) {
+                drawRect(color = darknessColor)
             }
 
-            // B. 3D CONVEX LENS CURVATURE & DEPTH GRADIENT
-            if (config.isEnabled && config.depthEnabled) {
-                val lensCenter = Offset(
-                    size.width * (0.5f - lightDirX * 0.22f),
-                    size.height * (0.5f - lightDirY * 0.22f)
-                )
-                val depthBrush = Brush.radialGradient(
+            // C. Layered Blur diffusion simulation for pre-API 33 or fallback
+            if (config.blur > 0.5f) {
+                val blurFactor = (config.blur / 30f).coerceIn(0.05f, 1f)
+                val blurBrush = Brush.radialGradient(
                     colors = listOf(
-                        Color.White.copy(alpha = (0.13f * config.vibrancy * config.convexCurvatureIntensity).coerceIn(0.02f, 0.30f)),
-                        Color.Transparent,
-                        Color.Black.copy(alpha = (0.22f * (1f - config.transparency) * config.depthIntensity).coerceIn(0.02f, 0.40f))
+                        Color.White.copy(alpha = 0.07f * blurFactor),
+                        Color(0xFF38BDF8).copy(alpha = 0.03f * blurFactor),
+                        Color.Transparent
                     ),
-                    center = lensCenter,
+                    center = Offset(size.width * 0.5f, size.height * 0.5f),
                     radius = (size.width.coerceAtLeast(size.height)) * 0.85f
                 )
-                drawRect(brush = depthBrush)
+                drawRect(brush = blurBrush)
             }
 
-            // C. REFRACTION & CAUSTIC BAND: Lens distortion along refraction angle
-            if (config.isEnabled && config.refractionAmount > 0.05f) {
-                val causticHeightFactor = (0.20f + 0.50f * config.refractionHeight).coerceIn(0.20f, 0.75f)
-                val causticBrush = Brush.linearGradient(
-                    colors = listOf(
-                        Color(0xFF80D8FF).copy(alpha = (0.14f * config.refractionAmount * config.vibrancy).coerceIn(0.01f, 0.28f)),
-                        Color.White.copy(alpha = (0.18f * config.refractionAmount).coerceIn(0.02f, 0.32f)),
-                        Color(0xFFEA80FC).copy(alpha = (0.09f * config.refractionAmount * config.vibrancy).coerceIn(0.01f, 0.20f)),
-                        Color.Transparent
-                    ),
-                    start = Offset(size.width * (0.5f - lightDirX * 0.4f), size.height * (0.5f - lightDirY * 0.4f)),
-                    end = Offset(size.width * 0.85f, size.height * causticHeightFactor)
-                )
-                drawRect(
-                    brush = causticBrush,
-                    size = Size(size.width, size.height * causticHeightFactor)
-                )
-            }
-
-            // D. Central droplet white spot removed per user specification: Clean, clear authentic lens without artifacts
-
-            // E. DIRECTIONAL EDGE HIGHLIGHTS & SPECULAR BEVEL (modulated by lightAngleDegrees)
-            if (config.isEnabled && config.edgeHighlights > 0.05f) {
-                val baseHighlightAlpha = (0.48f * config.edgeHighlights).coerceIn(0.05f, 0.70f)
-                val litTopAlpha = (baseHighlightAlpha * (0.35f + 0.65f * topLightFactor)).coerceIn(0.05f, 0.85f)
-                val litSideAlpha = (baseHighlightAlpha * (0.35f + 0.65f * leftLightFactor)).coerceIn(0.05f, 0.85f)
-
-                // 1. Subtle luminous bevel line along top rim
+            // D. Inner Top Highlight (alpha = Edge * 0.70)
+            if (innerTopAlpha > 0.02f) {
                 drawLine(
                     brush = Brush.horizontalGradient(
                         colors = listOf(
                             Color.Transparent,
-                            Color.White.copy(alpha = litTopAlpha),
+                            Color.White.copy(alpha = innerTopAlpha),
                             Color.Transparent
                         )
                     ),
-                    start = Offset(size.width * 0.06f, 1f),
-                    end = Offset(size.width * 0.94f, 1f),
-                    strokeWidth = (config.glassThickness * 0.9f).coerceIn(0.6f, 2.5f).dp.toPx()
+                    start = Offset(size.width * 0.08f, 1f),
+                    end = Offset(size.width * 0.92f, 1f),
+                    strokeWidth = 1.5.dp.toPx()
                 )
+            }
 
-                // 2. Corner specular flare positioned along light vector
-                val flareCenterX = size.width * (0.5f - lightDirX * 0.38f)
-                val flareCenterY = size.height * (0.5f - lightDirY * 0.38f)
-                val specularBrush = Brush.radialGradient(
-                    colors = listOf(
-                        Color.White.copy(alpha = 0.35f * config.edgeHighlights),
-                        Color.Transparent
-                    ),
-                    center = Offset(flareCenterX, flareCenterY),
-                    radius = (size.width.coerceAtLeast(size.height)) * 0.35f
-                )
-                drawRect(brush = specularBrush)
-
-                // 3. Opposite edge shadow transition (suggesting physical glass thickness)
-                val shadowEdgeAlpha = (0.20f * (1f - config.transparency) * config.depthIntensity).coerceIn(0.02f, 0.35f)
+            // E. Inner Bottom Highlight (alpha = Edge * 0.25)
+            if (innerBottomAlpha > 0.02f) {
                 drawLine(
                     brush = Brush.horizontalGradient(
                         colors = listOf(
                             Color.Transparent,
-                            Color.Black.copy(alpha = shadowEdgeAlpha * (0.4f + 0.6f * bottomLightFactor)),
+                            Color.White.copy(alpha = innerBottomAlpha),
                             Color.Transparent
                         )
                     ),
                     start = Offset(size.width * 0.12f, size.height - 1f),
                     end = Offset(size.width * 0.88f, size.height - 1f),
-                    strokeWidth = (config.glassThickness * 0.75f).coerceIn(0.5f, 2.0f).dp.toPx()
-                )
-
-                // 4. Subtle vertical side illumination along lit side
-                if (litSideAlpha > 0.08f && size.height > 20f) {
-                    val sideX = if (leftLightFactor >= rightLightFactor) 1f else size.width - 1f
-                    drawLine(
-                        brush = Brush.verticalGradient(
-                            colors = listOf(
-                                Color.Transparent,
-                                Color.White.copy(alpha = litSideAlpha * 0.70f),
-                                Color.Transparent
-                            )
-                        ),
-                        start = Offset(sideX, size.height * 0.10f),
-                        end = Offset(sideX, size.height * 0.90f),
-                        strokeWidth = (config.glassThickness * 0.8f).coerceIn(0.5f, 2.0f).dp.toPx()
-                    )
-                }
-
-                // 5. Subtle bottom rim ground bounce light (simulating light bouncing upward into glass)
-                val bounceAlpha = (0.12f * config.edgeHighlights * config.reflectionIntensity).coerceIn(0.02f, 0.30f)
-                drawLine(
-                    brush = Brush.horizontalGradient(
-                        colors = listOf(
-                            Color.Transparent,
-                            Color(0xFF80D8FF).copy(alpha = bounceAlpha),
-                            Color.White.copy(alpha = bounceAlpha * 1.3f),
-                            Color(0xFF80D8FF).copy(alpha = bounceAlpha),
-                            Color.Transparent
-                        )
-                    ),
-                    start = Offset(size.width * 0.15f, size.height - 1.5f),
-                    end = Offset(size.width * 0.85f, size.height - 1.5f),
                     strokeWidth = 1.dp.toPx()
                 )
             }
 
-            // F. LAYER REFRACTION / LAYER SEPARATION (secondary inner offset glass contour)
-            if (config.isEnabled && config.layerRefraction && size.width > 20f && size.height > 20f) {
-                val innerOffsetPx = 2.dp.toPx()
+            // F. Soft Inner Glow
+            if (innerGlowAlpha > 0.02f) {
                 drawRoundRect(
-                    brush = Brush.linearGradient(
+                    brush = Brush.radialGradient(
                         colors = listOf(
-                            Color.White.copy(alpha = 0.15f * config.refractionAmount),
-                            Color.Transparent,
-                            Color.Black.copy(alpha = 0.08f)
+                            Color.White.copy(alpha = innerGlowAlpha),
+                            Color.Transparent
                         ),
-                        start = Offset(size.width * (0.5f - lightDirX * 0.4f), size.height * (0.5f - lightDirY * 0.4f)),
-                        end = Offset(size.width * (0.5f + lightDirX * 0.4f), size.height * (0.5f + lightDirY * 0.4f))
+                        center = Offset(size.width * 0.5f, size.height * 0.5f),
+                        radius = (size.width.coerceAtLeast(size.height)) * 0.55f
                     ),
-                    topLeft = Offset(innerOffsetPx, innerOffsetPx),
-                    size = Size(size.width - innerOffsetPx * 2, size.height - innerOffsetPx * 2),
-                    style = Stroke(width = 0.75.dp.toPx())
+                    topLeft = Offset(2f, 2f),
+                    size = Size(size.width - 4f, size.height - 4f),
+                    style = Stroke(width = 2.dp.toPx())
                 )
             }
 
-            // G. REFLECTION INTENSITY (Diagonal light sheen across entire surface)
-            if (config.isEnabled && config.reflectionIntensity > 0.05f) {
-                val sheenAlpha = (0.16f * config.reflectionIntensity).coerceIn(0.02f, 0.35f)
-                val reflectionBrush = Brush.linearGradient(
+            // G. Diagonal (115°) Soft Sheen Band across surface (Fallback / Medium / Layer)
+            if (reflectionAlpha > 0.02f && !isQualityLow) {
+                val sheenBrush = Brush.linearGradient(
                     colors = listOf(
-                        Color.White.copy(alpha = sheenAlpha),
                         Color.Transparent,
-                        Color.White.copy(alpha = sheenAlpha * 0.5f),
+                        Color.White.copy(alpha = reflectionAlpha * 0.85f),
+                        Color.White.copy(alpha = reflectionAlpha * 0.35f),
                         Color.Transparent
                     ),
-                    start = Offset(size.width * (0.5f - lightDirX * 0.5f), size.height * (0.5f - lightDirY * 0.5f)),
-                    end = Offset(size.width * (0.5f + lightDirX * 0.5f), size.height * (0.5f + lightDirY * 0.5f))
+                    start = Offset(size.width * 0.15f, 0f),
+                    end = Offset(size.width * 0.85f, size.height)
                 )
-                drawRect(brush = reflectionBrush)
+                drawRect(brush = sheenBrush)
             }
 
-            // H. NEON EDGE AMBIENT GLOW (if neonEnabled)
+            // H. Neon Glow (if enabled)
             if (config.neonEnabled) {
                 val neonGlowColor = Color(config.neonColorHex).copy(alpha = 0.22f * config.neonIntensity)
                 drawRect(
@@ -462,40 +373,19 @@ fun Modifier.liquidGlassSurface(
                 )
             }
         }
+        // 7. 1DP BORDER WITH ALPHA = EDGE * 0.55
         .border(
-            width = effectiveBorderWidth,
+            width = 1.dp,
             brush = if (config.neonEnabled) {
                 Brush.sweepGradient(
                     listOf(
                         Color(config.neonColorHex),
-                        Color(config.neonColorHex).copy(alpha = 0.4f),
                         Color.White,
                         Color(config.neonColorHex)
                     )
                 )
-            } else if (config.isEnabled && config.edgeHighlights > 0f) {
-                // Directional beveled specular edge border responding to lightAngleDegrees
-                val isLightFromTopLeft = (topLightFactor + leftLightFactor) >= (bottomLightFactor + rightLightFactor)
-                val litAlpha = (0.45f * config.edgeHighlights * (0.5f + 0.5f * (topLightFactor + leftLightFactor))).coerceIn(0.12f, 0.75f)
-                val midAlpha = (0.15f * config.edgeHighlights).coerceIn(0.03f, 0.35f)
-                val shadowAlpha = (0.22f * config.depthIntensity).coerceIn(0.05f, 0.40f)
-                Brush.linearGradient(
-                    colors = if (isLightFromTopLeft) {
-                        listOf(
-                            Color.White.copy(alpha = litAlpha),
-                            Color.White.copy(alpha = midAlpha),
-                            Color.Black.copy(alpha = shadowAlpha)
-                        )
-                    } else {
-                        listOf(
-                            Color.Black.copy(alpha = shadowAlpha),
-                            Color.White.copy(alpha = midAlpha),
-                            Color.White.copy(alpha = litAlpha)
-                        )
-                    }
-                )
             } else {
-                SolidColor(Color.White.copy(alpha = 0.15f))
+                SolidColor(Color.White.copy(alpha = border1dpAlpha))
             },
             shape = shape
         )
@@ -511,14 +401,14 @@ fun Modifier.liquidGlassInteractive(
     accentColor: Color = LocalAppAccentColor.current,
     elevation: Dp = 4.dp
 ): Modifier {
-    val animFactor = config.animationIntensity.coerceAtLeast(0.1f)
-    val infiniteTransition = rememberInfiniteTransition(label = "glass_sheen")
+    val animFactor = (config.animSpeed / 100f).coerceIn(0.2f, 3.0f)
+    val infiniteTransition = rememberInfiniteTransition(label = "interactive_glass_sheen")
     val sweepOffset by infiniteTransition.animateFloat(
         initialValue = -100f,
         targetValue = 600f,
         animationSpec = infiniteRepeatable(
             animation = tween(
-                durationMillis = (4000 / animFactor).toInt().coerceAtLeast(1000),
+                durationMillis = (7000 / animFactor).toInt().coerceAtLeast(1000),
                 easing = LinearEasing
             ),
             repeatMode = RepeatMode.Restart

@@ -250,31 +250,17 @@ class MainActivity : ComponentActivity() {
 
             // Liquid Glass & Neon config state collection
             val lgMaster by viewModel.settingsManager.liquidGlassMaster.collectAsStateWithLifecycle()
-            val lgIntensity by viewModel.settingsManager.liquidGlassIntensity.collectAsStateWithLifecycle()
-            val lgBlur by viewModel.settingsManager.liquidGlassBlur.collectAsStateWithLifecycle()
-            val lgTransparency by viewModel.settingsManager.liquidGlassTransparency.collectAsStateWithLifecycle()
-            val lgRefraction by viewModel.settingsManager.liquidGlassRefraction.collectAsStateWithLifecycle()
-            val lgSpecular by viewModel.settingsManager.liquidGlassSpecular.collectAsStateWithLifecycle()
-            val lgBorderThickness by viewModel.settingsManager.liquidGlassBorderThickness.collectAsStateWithLifecycle()
-            val lgCornerRadius by viewModel.settingsManager.liquidGlassCornerRadius.collectAsStateWithLifecycle()
-            val lgRefractionHeight by viewModel.settingsManager.liquidGlassRefractionHeight.collectAsStateWithLifecycle()
-            val lgLayerRefraction by viewModel.settingsManager.liquidGlassLayerRefraction.collectAsStateWithLifecycle()
-            val lgDepthEnabled by viewModel.settingsManager.liquidGlassDepthEnabled.collectAsStateWithLifecycle()
-            val lgVibrancy by viewModel.settingsManager.liquidGlassVibrancy.collectAsStateWithLifecycle()
-            val lgEdgeHighlights by viewModel.settingsManager.liquidGlassEdgeHighlights.collectAsStateWithLifecycle()
-            val lgReflection by viewModel.settingsManager.liquidGlassReflection.collectAsStateWithLifecycle()
+            val lgQuality by viewModel.settingsManager.liquidGlassQuality.collectAsStateWithLifecycle()
+            val lgTransparencyInt by viewModel.settingsManager.liquidGlassTransparencyInt.collectAsStateWithLifecycle()
+            val lgBlurInt by viewModel.settingsManager.liquidGlassBlurInt.collectAsStateWithLifecycle()
+            val lgRefractionInt by viewModel.settingsManager.liquidGlassRefractionInt.collectAsStateWithLifecycle()
+            val lgLensMagnifyInt by viewModel.settingsManager.liquidGlassLensMagnifyInt.collectAsStateWithLifecycle()
+            val lgEdgeHighlightInt by viewModel.settingsManager.liquidGlassEdgeHighlightInt.collectAsStateWithLifecycle()
+            val lgReflectionInt by viewModel.settingsManager.liquidGlassReflectionInt.collectAsStateWithLifecycle()
+            val lgDarknessInt by viewModel.settingsManager.liquidGlassDarknessInt.collectAsStateWithLifecycle()
+            val lgCornerRadiusInt by viewModel.settingsManager.liquidGlassCornerRadiusInt.collectAsStateWithLifecycle()
+            val lgAnimSpeedInt by viewModel.settingsManager.liquidGlassAnimSpeedInt.collectAsStateWithLifecycle()
             val lgTintColorHex by viewModel.settingsManager.liquidGlassTintColorHex.collectAsStateWithLifecycle()
-            val lgShadowElevation by viewModel.settingsManager.liquidGlassShadowElevation.collectAsStateWithLifecycle()
-            val lgAnimIntensity by viewModel.settingsManager.liquidGlassAnimationIntensity.collectAsStateWithLifecycle()
-            val lgPerfMode by viewModel.settingsManager.liquidGlassPerformanceMode.collectAsStateWithLifecycle()
-
-            val subGlassEnabled by viewModel.settingsManager.subscribeGlassEnabled.collectAsStateWithLifecycle()
-            val subGlassTintHex by viewModel.settingsManager.subscribeGlassTintHex.collectAsStateWithLifecycle()
-            val subTransparency by viewModel.settingsManager.subscribeTransparency.collectAsStateWithLifecycle()
-            val subCornerRadius by viewModel.settingsManager.subscribeCornerRadius.collectAsStateWithLifecycle()
-            val subDepth by viewModel.settingsManager.subscribeDepth.collectAsStateWithLifecycle()
-            val subRefraction by viewModel.settingsManager.subscribeRefraction.collectAsStateWithLifecycle()
-            val subEdgeHighlight by viewModel.settingsManager.subscribeEdgeHighlight.collectAsStateWithLifecycle()
 
             val neonMaster by viewModel.settingsManager.neonLightsMaster.collectAsStateWithLifecycle()
             val neonColorHex by viewModel.settingsManager.neonColorHex.collectAsStateWithLifecycle()
@@ -282,78 +268,25 @@ class MainActivity : ComponentActivity() {
             val neonAnimated by viewModel.settingsManager.neonAnimated.collectAsStateWithLifecycle()
             val neonSpeed by viewModel.settingsManager.neonAnimationSpeed.collectAsStateWithLifecycle()
 
-            val opticalShaderEnabled by viewModel.settingsManager.opticalShaderEnabled.collectAsStateWithLifecycle()
-            val opticalCurvaturePower by viewModel.settingsManager.opticalCurvaturePower.collectAsStateWithLifecycle()
-            val opticalChromaticDispersion by viewModel.settingsManager.opticalChromaticDispersion.collectAsStateWithLifecycle()
-            val springPhysicsEnabled by viewModel.settingsManager.springPhysicsEnabled.collectAsStateWithLifecycle()
-
-            val lgLightAngle by viewModel.settingsManager.liquidGlassLightAngle.collectAsStateWithLifecycle()
-            val lgDropReflEnabled by viewModel.settingsManager.liquidGlassDropReflectionEnabled.collectAsStateWithLifecycle()
-            val lgDropReflSize by viewModel.settingsManager.liquidGlassDropReflectionSize.collectAsStateWithLifecycle()
-            val lgDropReflIntensity by viewModel.settingsManager.liquidGlassDropReflectionIntensity.collectAsStateWithLifecycle()
-            val lgDropReflX by viewModel.settingsManager.liquidGlassDropReflectionX.collectAsStateWithLifecycle()
-            val lgDropReflY by viewModel.settingsManager.liquidGlassDropReflectionY.collectAsStateWithLifecycle()
-            val lgDropReflSoftness by viewModel.settingsManager.liquidGlassDropReflectionSoftness.collectAsStateWithLifecycle()
-            val lgDropSecHighlight by viewModel.settingsManager.liquidGlassDropSecondaryHighlight.collectAsStateWithLifecycle()
-            val lgConvexCurvature by viewModel.settingsManager.liquidGlassConvexCurvature.collectAsStateWithLifecycle()
-            val lgBevelStrength by viewModel.settingsManager.liquidGlassBevelStrength.collectAsStateWithLifecycle()
-            val lgDepthIntensity by viewModel.settingsManager.liquidGlassDepthIntensity.collectAsStateWithLifecycle()
-            val lgSmoothness by viewModel.settingsManager.liquidGlassSmoothness.collectAsStateWithLifecycle()
-            val lgOpticalTilt by viewModel.settingsManager.opticalTiltStrength.collectAsStateWithLifecycle()
-            val lgAnimSmoothness by viewModel.settingsManager.animationSmoothnessMode.collectAsStateWithLifecycle()
-
             val glassConfig = com.example.ui.theme.LiquidGlassStyleConfig(
                 isEnabled = lgMaster,
-                transparency = lgTransparency,
-                blurRadius = lgBlur,
-                cornerRadiusDp = lgCornerRadius,
-                refractionHeight = lgRefractionHeight,
-                refractionAmount = lgRefraction,
-                layerRefraction = lgLayerRefraction,
-                depthEnabled = lgDepthEnabled,
-                vibrancy = lgVibrancy,
-                edgeHighlights = lgEdgeHighlights,
-                glassThickness = lgBorderThickness,
-                reflectionIntensity = lgReflection,
+                quality = lgQuality,
+                transparency = lgTransparencyInt.toFloat(),
+                blur = lgBlurInt.toFloat(),
+                refraction = lgRefractionInt.toFloat(),
+                lensMagnify = lgLensMagnifyInt.toFloat(),
+                edgeHighlight = lgEdgeHighlightInt.toFloat(),
+                reflection = lgReflectionInt.toFloat(),
+                tintDarkness = lgDarknessInt.toFloat(),
+                cornerRadiusDp = lgCornerRadiusInt.toFloat(),
+                animSpeed = lgAnimSpeedInt.toFloat(),
                 glassTintColorHex = lgTintColorHex,
-                shadowElevationDp = lgShadowElevation,
-                animationIntensity = lgAnimIntensity,
-                performanceMode = lgPerfMode,
-                glassIntensity = lgIntensity,
-                refractionIntensity = lgRefraction,
-                specularHighlight = lgSpecular,
-                borderThicknessDp = lgBorderThickness,
                 isDarkGlass = uiTheme != "Liquid Glass (Light)" && uiTheme != "Light Mode",
-                lightAngleDegrees = lgLightAngle,
-                liquidDropReflectionEnabled = lgDropReflEnabled,
-                dropReflectionSize = lgDropReflSize,
-                dropReflectionIntensity = lgDropReflIntensity,
-                dropReflectionX = lgDropReflX,
-                dropReflectionY = lgDropReflY,
-                dropReflectionSoftness = lgDropReflSoftness,
-                dropSecondaryHighlight = lgDropSecHighlight,
-                opticalTiltStrength = lgOpticalTilt,
-                animationSmoothnessMode = lgAnimSmoothness,
-                convexCurvatureIntensity = lgConvexCurvature,
-                bevelStrength = lgBevelStrength,
-                depthIntensity = lgDepthIntensity,
-                glassSmoothness = lgSmoothness,
-                opticalShaderEnabled = opticalShaderEnabled,
-                edgeCurvaturePower = opticalCurvaturePower,
-                chromaticDispersion = opticalChromaticDispersion,
-                springPhysicsEnabled = springPhysicsEnabled,
                 neonEnabled = neonMaster,
                 neonColorHex = neonColorHex,
                 neonIntensity = neonIntensity,
                 neonAnimated = neonAnimated,
-                neonAnimationSpeed = neonSpeed,
-                subscribeGlassEnabled = subGlassEnabled,
-                subscribeGlassTintHex = subGlassTintHex,
-                subscribeTransparency = subTransparency,
-                subscribeCornerRadius = subCornerRadius,
-                subscribeDepth = subDepth,
-                subscribeRefraction = subRefraction,
-                subscribeEdgeHighlight = subEdgeHighlight
+                neonAnimationSpeed = neonSpeed
             )
 
             val homeCardCornerRadius by viewModel.settingsManager.homeCardCornerRadius.collectAsStateWithLifecycle()
@@ -420,6 +353,15 @@ fun MyTubeApp(
     val context = LocalContext.current
     val coroutineScope = rememberCoroutineScope()
     val snackbarHostState = remember { SnackbarHostState() }
+
+    // Video picker launcher for Add (+) navigation button
+    val videoPickerLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.GetContent()
+    ) { uri: Uri? ->
+        if (uri != null) {
+            viewModel.importGalleryVideo(uri)
+        }
+    }
 
     // State collections from ViewModel
     val allVideos by viewModel.allVideos.collectAsStateWithLifecycle()
@@ -945,13 +887,13 @@ fun MyTubeApp(
                         modifier = Modifier
                             .align(Alignment.BottomCenter)
                             .fillMaxWidth()
-                            .navigationBarsPadding()
-                            .padding(horizontal = 14.dp, vertical = 8.dp),
+                            .navigationBarsPadding(),
                         contentAlignment = Alignment.Center
                     ) {
                         YouTubeBottomBar(
                             selectedTab = selectedTab,
                             onTabSelected = { viewModel.selectTab(it) },
+                            onAddClick = { videoPickerLauncher.launch("video/*") },
                             modifier = Modifier.fillMaxWidth()
                         )
                     }

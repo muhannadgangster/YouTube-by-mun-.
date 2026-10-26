@@ -403,19 +403,61 @@ class SettingsManager(context: Context) {
     // ==========================================
     // LIQUID GLASS & NEON CUSTOMIZATION SYSTEM
     // ==========================================
+    // 1. Enable Liquid Glass
     private val _liquidGlassMaster = MutableStateFlow(prefs.getBoolean("lg_master_enabled", true))
     val liquidGlassMaster: StateFlow<Boolean> = _liquidGlassMaster.asStateFlow()
 
+    // 2. Quality (Low / Medium / High)
+    private val _liquidGlassQuality = MutableStateFlow(prefs.getString("lg_quality_mode", "High") ?: "High")
+    val liquidGlassQuality: StateFlow<String> = _liquidGlassQuality.asStateFlow()
+
+    // 4. Transparency 0..100 (Default 65)
+    private val _liquidGlassTransparencyInt = MutableStateFlow(prefs.getInt("lg_transparency_int", 65))
+    val liquidGlassTransparencyInt: StateFlow<Int> = _liquidGlassTransparencyInt.asStateFlow()
+
+    // 5. Background blur 0..30 (Default 8)
+    private val _liquidGlassBlurInt = MutableStateFlow(prefs.getInt("lg_blur_int", 8))
+    val liquidGlassBlurInt: StateFlow<Int> = _liquidGlassBlurInt.asStateFlow()
+
+    // 6. Refraction/tilt 0..60 (Default 28)
+    private val _liquidGlassRefractionInt = MutableStateFlow(prefs.getInt("lg_refraction_int", 28))
+    val liquidGlassRefractionInt: StateFlow<Int> = _liquidGlassRefractionInt.asStateFlow()
+
+    // 7. Lens magnify 0..100 (Default 60)
+    private val _liquidGlassLensMagnifyInt = MutableStateFlow(prefs.getInt("lg_lens_magnify_int", 60))
+    val liquidGlassLensMagnifyInt: StateFlow<Int> = _liquidGlassLensMagnifyInt.asStateFlow()
+
+    // 8. Edge highlight and bevel 0..100 (Default 60)
+    private val _liquidGlassEdgeHighlightInt = MutableStateFlow(prefs.getInt("lg_edge_highlight_int", 60))
+    val liquidGlassEdgeHighlightInt: StateFlow<Int> = _liquidGlassEdgeHighlightInt.asStateFlow()
+
+    // 9. Reflection 0..100 (Default 40)
+    private val _liquidGlassReflectionInt = MutableStateFlow(prefs.getInt("lg_reflection_int", 40))
+    val liquidGlassReflectionInt: StateFlow<Int> = _liquidGlassReflectionInt.asStateFlow()
+
+    // 10. Tint darkness 0..100 (Default 25)
+    private val _liquidGlassDarknessInt = MutableStateFlow(prefs.getInt("lg_darkness_int", 25))
+    val liquidGlassDarknessInt: StateFlow<Int> = _liquidGlassDarknessInt.asStateFlow()
+
+    // 11. Corner radius 10..32 (Default 32)
+    private val _liquidGlassCornerRadiusInt = MutableStateFlow(prefs.getInt("lg_corner_radius_int", 32))
+    val liquidGlassCornerRadiusInt: StateFlow<Int> = _liquidGlassCornerRadiusInt.asStateFlow()
+
+    // 12. Animation speed 20..200 (Default 100)
+    private val _liquidGlassAnimSpeedInt = MutableStateFlow(prefs.getInt("lg_anim_speed_int", 100))
+    val liquidGlassAnimSpeedInt: StateFlow<Int> = _liquidGlassAnimSpeedInt.asStateFlow()
+
+    // Backward-compatibility float flows:
     private val _liquidGlassIntensity = MutableStateFlow(prefs.getFloat("lg_intensity", 0.85f))
     val liquidGlassIntensity: StateFlow<Float> = _liquidGlassIntensity.asStateFlow()
 
-    private val _liquidGlassBlur = MutableStateFlow(prefs.getFloat("lg_blur", 24f))
+    private val _liquidGlassBlur = MutableStateFlow(prefs.getFloat("lg_blur", 8f))
     val liquidGlassBlur: StateFlow<Float> = _liquidGlassBlur.asStateFlow()
 
-    private val _liquidGlassTransparency = MutableStateFlow(prefs.getFloat("lg_transparency", 0.70f))
+    private val _liquidGlassTransparency = MutableStateFlow(prefs.getFloat("lg_transparency", 0.65f))
     val liquidGlassTransparency: StateFlow<Float> = _liquidGlassTransparency.asStateFlow()
 
-    private val _liquidGlassRefraction = MutableStateFlow(prefs.getFloat("lg_refraction", 0.65f))
+    private val _liquidGlassRefraction = MutableStateFlow(prefs.getFloat("lg_refraction", 28f))
     val liquidGlassRefraction: StateFlow<Float> = _liquidGlassRefraction.asStateFlow()
 
     private val _liquidGlassSpecular = MutableStateFlow(prefs.getBoolean("lg_specular", true))
@@ -424,7 +466,7 @@ class SettingsManager(context: Context) {
     private val _liquidGlassBorderThickness = MutableStateFlow(prefs.getFloat("lg_border_thickness", 1.0f))
     val liquidGlassBorderThickness: StateFlow<Float> = _liquidGlassBorderThickness.asStateFlow()
 
-    private val _liquidGlassCornerRadius = MutableStateFlow(prefs.getFloat("lg_corner_radius", 16f))
+    private val _liquidGlassCornerRadius = MutableStateFlow(prefs.getFloat("lg_corner_radius", 32f))
     val liquidGlassCornerRadius: StateFlow<Float> = _liquidGlassCornerRadius.asStateFlow()
 
     private val _liquidGlassRefractionHeight = MutableStateFlow(prefs.getFloat("lg_refraction_height", 0.65f))
@@ -573,19 +615,207 @@ class SettingsManager(context: Context) {
         prefs.edit().putFloat("lg_intensity", v).apply()
     }
 
-    fun setLiquidGlassBlur(v: Float) {
-        _liquidGlassBlur.value = v
-        prefs.edit().putFloat("lg_blur", v).apply()
+    // 2. Quality Mode (Low / Medium / High)
+    fun setLiquidGlassQuality(mode: String) {
+        _liquidGlassQuality.value = mode
+        _liquidGlassPerformanceMode.value = mode
+        prefs.edit().putString("lg_quality_mode", mode).putString("lg_perf_mode", mode).apply()
+    }
+
+    // 4. Transparency (0..100, default 65)
+    fun setLiquidGlassTransparency(v: Int) {
+        val clamped = v.coerceIn(0, 100)
+        _liquidGlassTransparencyInt.value = clamped
+        _liquidGlassTransparency.value = clamped / 100f
+        prefs.edit().putInt("lg_transparency_int", clamped).putFloat("lg_transparency", clamped / 100f).apply()
     }
 
     fun setLiquidGlassTransparency(v: Float) {
-        _liquidGlassTransparency.value = v
-        prefs.edit().putFloat("lg_transparency", v).apply()
+        setLiquidGlassTransparency((v * 100).toInt())
+    }
+
+    // 5. Background Blur (0..30, default 8)
+    fun setLiquidGlassBlur(v: Int) {
+        val clamped = v.coerceIn(0, 30)
+        _liquidGlassBlurInt.value = clamped
+        _liquidGlassBlur.value = clamped.toFloat()
+        prefs.edit().putInt("lg_blur_int", clamped).putFloat("lg_blur", clamped.toFloat()).apply()
+    }
+
+    fun setLiquidGlassBlur(v: Float) {
+        setLiquidGlassBlur(v.toInt())
+    }
+
+    // 6. Refraction/Tilt (0..60, default 28)
+    fun setLiquidGlassRefraction(v: Int) {
+        val clamped = v.coerceIn(0, 60)
+        _liquidGlassRefractionInt.value = clamped
+        _liquidGlassRefraction.value = clamped.toFloat()
+        prefs.edit().putInt("lg_refraction_int", clamped).putFloat("lg_refraction", clamped.toFloat()).apply()
     }
 
     fun setLiquidGlassRefraction(v: Float) {
-        _liquidGlassRefraction.value = v
-        prefs.edit().putFloat("lg_refraction", v).apply()
+        setLiquidGlassRefraction(if (v <= 1.0f) (v * 60).toInt() else v.toInt())
+    }
+
+    // 7. Lens Magnify (0..100, default 60)
+    fun setLiquidGlassLensMagnify(v: Int) {
+        val clamped = v.coerceIn(0, 100)
+        _liquidGlassLensMagnifyInt.value = clamped
+        prefs.edit().putInt("lg_lens_magnify_int", clamped).apply()
+    }
+
+    // 8. Edge Highlight and Bevel (0..100, default 60)
+    fun setLiquidGlassEdgeHighlight(v: Int) {
+        val clamped = v.coerceIn(0, 100)
+        _liquidGlassEdgeHighlightInt.value = clamped
+        _liquidGlassEdgeHighlights.value = clamped / 100f
+        prefs.edit().putInt("lg_edge_highlight_int", clamped).putFloat("lg_edge_highlights", clamped / 100f).apply()
+    }
+
+    fun setLiquidGlassEdgeHighlights(v: Float) {
+        setLiquidGlassEdgeHighlight((v * 100).toInt())
+    }
+
+    // 9. Reflection (0..100, default 40)
+    fun setLiquidGlassReflection(v: Int) {
+        val clamped = v.coerceIn(0, 100)
+        _liquidGlassReflectionInt.value = clamped
+        _liquidGlassReflection.value = clamped / 100f
+        prefs.edit().putInt("lg_reflection_int", clamped).putFloat("lg_reflection", clamped / 100f).apply()
+    }
+
+    fun setLiquidGlassReflection(v: Float) {
+        setLiquidGlassReflection((v * 100).toInt())
+    }
+
+    // 10. Tint Darkness (0..100, default 25)
+    fun setLiquidGlassDarkness(v: Int) {
+        val clamped = v.coerceIn(0, 100)
+        _liquidGlassDarknessInt.value = clamped
+        prefs.edit().putInt("lg_darkness_int", clamped).apply()
+    }
+
+    // 11. Corner Radius (10..32, default 32)
+    fun setLiquidGlassCornerRadius(v: Int) {
+        val clamped = v.coerceIn(10, 32)
+        _liquidGlassCornerRadiusInt.value = clamped
+        _liquidGlassCornerRadius.value = clamped.toFloat()
+        prefs.edit().putInt("lg_corner_radius_int", clamped).putFloat("lg_corner_radius", clamped.toFloat()).apply()
+    }
+
+    fun setLiquidGlassCornerRadius(v: Float) {
+        setLiquidGlassCornerRadius(v.toInt())
+    }
+
+    // 12. Animation Speed (20..200, default 100)
+    fun setLiquidGlassAnimSpeed(v: Int) {
+        val clamped = v.coerceIn(20, 200)
+        _liquidGlassAnimSpeedInt.value = clamped
+        _liquidGlassAnimationIntensity.value = clamped / 100f
+        prefs.edit().putInt("lg_anim_speed_int", clamped).putFloat("lg_anim_intensity", clamped / 100f).apply()
+    }
+
+    fun setLiquidGlassAnimationIntensity(v: Float) {
+        setLiquidGlassAnimSpeed((v * 100).toInt())
+    }
+
+    // Tint color (ARGB hex)
+    fun setLiquidGlassTintColorHex(colorLong: Long) {
+        _liquidGlassTintColorHex.value = colorLong
+        prefs.edit().putLong("lg_tint_color_hex", colorLong).apply()
+    }
+
+    // PRESET PROFILES
+    fun applyPresetCrystal() {
+        setLiquidGlassTransparency(65)
+        setLiquidGlassBlur(8)
+        setLiquidGlassRefraction(28)
+        setLiquidGlassLensMagnify(60)
+        setLiquidGlassEdgeHighlight(60)
+        setLiquidGlassReflection(40)
+        setLiquidGlassDarkness(25)
+        setLiquidGlassCornerRadius(32)
+        setLiquidGlassAnimSpeed(100)
+        setLiquidGlassQuality("High")
+        setLiquidGlassTintColorHex(0x35141928L)
+    }
+
+    fun applyPresetClear() {
+        setLiquidGlassTransparency(90)
+        setLiquidGlassBlur(0)
+        setLiquidGlassRefraction(20)
+        setLiquidGlassLensMagnify(40)
+        setLiquidGlassEdgeHighlight(70)
+        setLiquidGlassReflection(50)
+        setLiquidGlassDarkness(10)
+        setLiquidGlassCornerRadius(32)
+        setLiquidGlassAnimSpeed(100)
+        setLiquidGlassQuality("High")
+        setLiquidGlassTintColorHex(0x15FFFFFFL)
+    }
+
+    fun applyPresetFrosted() {
+        setLiquidGlassTransparency(45)
+        setLiquidGlassBlur(22)
+        setLiquidGlassRefraction(12)
+        setLiquidGlassLensMagnify(30)
+        setLiquidGlassEdgeHighlight(40)
+        setLiquidGlassReflection(25)
+        setLiquidGlassDarkness(20)
+        setLiquidGlassCornerRadius(32)
+        setLiquidGlassAnimSpeed(100)
+        setLiquidGlassQuality("High")
+        setLiquidGlassTintColorHex(0x40FFFFFFL)
+    }
+
+    fun applyPresetDark() {
+        setLiquidGlassTransparency(50)
+        setLiquidGlassBlur(12)
+        setLiquidGlassRefraction(35)
+        setLiquidGlassLensMagnify(70)
+        setLiquidGlassEdgeHighlight(55)
+        setLiquidGlassReflection(35)
+        setLiquidGlassDarkness(65)
+        setLiquidGlassCornerRadius(32)
+        setLiquidGlassAnimSpeed(100)
+        setLiquidGlassQuality("High")
+        setLiquidGlassTintColorHex(0x800A0E17L)
+    }
+
+    // PER-SECTION RESETS
+    fun resetBasics() {
+        setLiquidGlassMaster(true)
+        setLiquidGlassQuality("High")
+        setLiquidGlassTintColorHex(0x35141928L)
+    }
+
+    fun resetOptics() {
+        setLiquidGlassTransparency(65)
+        setLiquidGlassBlur(8)
+        setLiquidGlassRefraction(28)
+        setLiquidGlassLensMagnify(60)
+    }
+
+    fun resetLight() {
+        setLiquidGlassEdgeHighlight(60)
+        setLiquidGlassReflection(40)
+        setLiquidGlassDarkness(25)
+        setLiquidGlassTintColorHex(0x35141928L)
+    }
+
+    fun resetShape() {
+        setLiquidGlassCornerRadius(32)
+    }
+
+    fun resetPerformance() {
+        setLiquidGlassAnimSpeed(100)
+        setLiquidGlassQuality("High")
+    }
+
+    fun resetAllLiquidGlass() {
+        applyPresetCrystal()
+        setLiquidGlassMaster(true)
     }
 
     fun setLiquidGlassSpecular(v: Boolean) {
@@ -596,11 +826,6 @@ class SettingsManager(context: Context) {
     fun setLiquidGlassBorderThickness(v: Float) {
         _liquidGlassBorderThickness.value = v
         prefs.edit().putFloat("lg_border_thickness", v).apply()
-    }
-
-    fun setLiquidGlassCornerRadius(v: Float) {
-        _liquidGlassCornerRadius.value = v
-        prefs.edit().putFloat("lg_corner_radius", v).apply()
     }
 
     fun setLiquidGlassRefractionHeight(v: Float) {
@@ -623,34 +848,13 @@ class SettingsManager(context: Context) {
         prefs.edit().putFloat("lg_vibrancy", v).apply()
     }
 
-    fun setLiquidGlassEdgeHighlights(v: Float) {
-        _liquidGlassEdgeHighlights.value = v
-        prefs.edit().putFloat("lg_edge_highlights", v).apply()
-    }
-
-    fun setLiquidGlassReflection(v: Float) {
-        _liquidGlassReflection.value = v
-        prefs.edit().putFloat("lg_reflection", v).apply()
-    }
-
-    fun setLiquidGlassTintColorHex(colorLong: Long) {
-        _liquidGlassTintColorHex.value = colorLong
-        prefs.edit().putLong("lg_tint_color_hex", colorLong).apply()
-    }
-
     fun setLiquidGlassShadowElevation(v: Float) {
         _liquidGlassShadowElevation.value = v
         prefs.edit().putFloat("lg_shadow_elevation", v).apply()
     }
 
-    fun setLiquidGlassAnimationIntensity(v: Float) {
-        _liquidGlassAnimationIntensity.value = v
-        prefs.edit().putFloat("lg_anim_intensity", v).apply()
-    }
-
     fun setLiquidGlassPerformanceMode(mode: String) {
-        _liquidGlassPerformanceMode.value = mode
-        prefs.edit().putString("lg_perf_mode", mode).apply()
+        setLiquidGlassQuality(mode)
     }
 
     fun setOpticalTiltStrength(v: Float) {
@@ -760,8 +964,8 @@ class SettingsManager(context: Context) {
 
     fun resetLiquidGlassDefaults() {
         setLiquidGlassMaster(true)
-        setLiquidGlassTransparency(0.70f)
-        setLiquidGlassBlur(24f)
+        setLiquidGlassTransparency(0.92f)
+        setLiquidGlassBlur(0f)
         setLiquidGlassCornerRadius(16f)
         setLiquidGlassRefractionHeight(0.65f)
         setLiquidGlassRefraction(0.65f)

@@ -1,8 +1,14 @@
 package com.example.ui.screens
 
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.spring
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -34,11 +40,16 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
@@ -95,7 +106,7 @@ fun HomeScreen(
             .fillMaxSize()
             .background(Color.Transparent)
     ) {
-        // Filter Chips Row (Screenshot 6 style)
+        // Filter Chips Row with authentic Liquid Glass refraction and diamond rim
         Row(
             modifier = Modifier
                 .fillMaxWidth()
@@ -105,110 +116,29 @@ fun HomeScreen(
             horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
             // Explore Compass Pill
-            val exploreShape = RoundedCornerShape(20.dp)
-            Box(
-                modifier = Modifier
-                    .then(
-                        if (glassConfig.isEnabled) {
-                            Modifier.liquidGlassSurface(
-                                shape = exploreShape,
-                                config = glassConfig,
-                                elevation = 2.dp
-                            )
-                        } else {
-                            Modifier
-                                .clip(exploreShape)
-                                .background(YtSurfaceVariant)
-                        }
-                    )
-                    .clickable { onFilterSelected("All") }
-                    .padding(horizontal = 12.dp, vertical = 7.dp)
-                    .testTag("filter_chip_explore"),
-                contentAlignment = Alignment.Center
-            ) {
-                Icon(
-                    imageVector = Icons.Default.Explore,
-                    contentDescription = "Explore",
-                    tint = YtTextPrimary,
-                    modifier = Modifier.size(17.dp)
-                )
-            }
+            LiquidGlassFilterChip(
+                icon = Icons.Default.Explore,
+                isSelected = selectedFilter == "All",
+                onClick = { onFilterSelected("All") },
+                testTag = "filter_chip_explore"
+            )
 
             // Quick Mix / Shuffle Chip
-            val mixShape = RoundedCornerShape(20.dp)
-            Box(
-                modifier = Modifier
-                    .then(
-                        if (glassConfig.isEnabled) {
-                            Modifier.liquidGlassSurface(
-                                shape = mixShape,
-                                config = glassConfig,
-                                accentColor = appAccentColor,
-                                elevation = 2.dp
-                            )
-                        } else {
-                            Modifier
-                                .clip(mixShape)
-                                .background(YtSurfaceVariant)
-                        }
-                    )
-                    .clickable { onRefresh() }
-                    .padding(horizontal = 12.dp, vertical = 7.dp)
-                    .testTag("filter_chip_mix_shuffle"),
-                contentAlignment = Alignment.Center
-            ) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Icon(
-                        imageVector = Icons.Default.Shuffle,
-                        contentDescription = "Mix & Shuffle",
-                        tint = appAccentColor,
-                        modifier = Modifier.size(15.dp)
-                    )
-                    Spacer(modifier = Modifier.width(4.dp))
-                    Text(
-                        text = "Mix 🔀",
-                        color = YtTextPrimary,
-                        fontSize = 12.sp,
-                        fontWeight = FontWeight.SemiBold
-                    )
-                }
-            }
+            LiquidGlassFilterChip(
+                text = "Mix 🔀",
+                icon = Icons.Default.Shuffle,
+                isSelected = false,
+                onClick = { onRefresh() },
+                testTag = "filter_chip_mix_shuffle"
+            )
 
             filterChips.forEach { chip ->
-                val isSelected = selectedFilter == chip
-                val chipShape = RoundedCornerShape(20.dp)
-                Box(
-                    modifier = Modifier
-                        .then(
-                            if (isSelected) {
-                                Modifier
-                                    .shadow(elevation = 4.dp, shape = chipShape, spotColor = Color(0x40000000))
-                                    .clip(chipShape)
-                                    .background(if (glassConfig.isEnabled) Color.White else YtPillActive)
-                            } else if (glassConfig.isEnabled) {
-                                Modifier.liquidGlassSurface(
-                                    shape = chipShape,
-                                    config = glassConfig,
-                                    elevation = 2.dp
-                                )
-                            } else {
-                                Modifier
-                                    .clip(chipShape)
-                                    .background(YtPillBackground)
-                            }
-                        )
-                        .clickable { onFilterSelected(chip) }
-                        .padding(horizontal = 14.dp, vertical = 7.dp)
-                        .testTag("filter_chip_$chip"),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Text(
-                        text = chip,
-                        color = if (isSelected) Color.Black else YtTextPrimary,
-                        fontSize = 13.sp,
-                        fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium
-                    )
-                }
+                LiquidGlassFilterChip(
+                    text = chip,
+                    isSelected = selectedFilter == chip,
+                    onClick = { onFilterSelected(chip) },
+                    testTag = "filter_chip_$chip"
+                )
             }
         }
 
@@ -387,6 +317,125 @@ fun HomeScreen(
                         }
                     }
                 }
+            }
+        }
+    }
+}
+
+/**
+ * Reusable LiquidGlassFilterChip:
+ * - Real optical background refraction and diamond edge bevel
+ * - Smooth tactile press animation with refraction bloom
+ * - Foreground text and icons stay 100% sharp and legible
+ */
+@Composable
+private fun LiquidGlassFilterChip(
+    text: String? = null,
+    icon: ImageVector? = null,
+    isSelected: Boolean = false,
+    onClick: () -> Unit,
+    testTag: String,
+    accentColor: Color = LocalAppAccentColor.current,
+    modifier: Modifier = Modifier
+) {
+    val glassConfig = LocalLiquidGlassConfig.current
+    val interactionSource = remember { MutableInteractionSource() }
+    val isPressed by interactionSource.collectIsPressedAsState()
+
+    // Smooth tactile scale & refraction bloom on touch/press
+    val scale by animateFloatAsState(
+        targetValue = if (isPressed) 0.94f else 1.0f,
+        animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMedium),
+        label = "chip_scale"
+    )
+
+    val chipShape = RoundedCornerShape(20.dp)
+
+    val chipConfig = remember(glassConfig, isSelected, isPressed) {
+        glassConfig.copy(
+            transparency = if (isSelected) 0.82f else if (isPressed) 0.76f else 0.92f,
+            refractionAmount = if (isPressed) (glassConfig.refractionAmount * 1.5f).coerceAtMost(1f) else (if (isSelected) (glassConfig.refractionAmount * 1.25f).coerceAtMost(1f) else glassConfig.refractionAmount),
+            lensMagnification = if (isSelected) 1.18f else 1.0f,
+            edgeHighlights = if (isSelected) 0.95f else glassConfig.edgeHighlights,
+            cornerRadiusDp = 20f
+        )
+    }
+
+    Box(
+        modifier = modifier
+            .graphicsLayer {
+                scaleX = scale
+                scaleY = scale
+            }
+            .clip(chipShape)
+            .clickable(
+                interactionSource = interactionSource,
+                indication = null,
+                onClick = onClick
+            )
+            .testTag(testTag),
+        contentAlignment = Alignment.Center
+    ) {
+        // Dedicated Background Glass Layer with optical refraction & diamond rim
+        if (glassConfig.isEnabled) {
+            Box(
+                modifier = Modifier
+                    .matchParentSize()
+                    .liquidGlassSurface(
+                        shape = chipShape,
+                        config = chipConfig,
+                        accentColor = if (isSelected) accentColor else Color.White,
+                        elevation = if (isSelected) 4.dp else 2.dp
+                    )
+                    .border(
+                        width = if (isSelected) 1.2.dp else 0.8.dp,
+                        brush = Brush.linearGradient(
+                            colors = if (isSelected) listOf(
+                                Color.White.copy(alpha = 0.95f),
+                                accentColor.copy(alpha = 0.65f),
+                                Color.White.copy(alpha = 0.85f)
+                            ) else listOf(
+                                Color.White.copy(alpha = 0.50f),
+                                Color.White.copy(alpha = 0.15f),
+                                Color.White.copy(alpha = 0.40f)
+                            )
+                        ),
+                        shape = chipShape
+                    )
+            )
+        } else {
+            Box(
+                modifier = Modifier
+                    .matchParentSize()
+                    .background(if (isSelected) YtPillActive else YtPillBackground)
+                    .border(0.75.dp, if (isSelected) accentColor else YtBorder, chipShape)
+            )
+        }
+
+        // Foreground: Razor-sharp text and icon
+        Row(
+            modifier = Modifier.padding(horizontal = 14.dp, vertical = 7.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.Center
+        ) {
+            if (icon != null) {
+                Icon(
+                    imageVector = icon,
+                    contentDescription = text,
+                    tint = if (isSelected) (if (glassConfig.isEnabled) Color.White else Color.Black) else YtTextPrimary,
+                    modifier = Modifier.size(16.dp)
+                )
+                if (text != null) {
+                    Spacer(modifier = Modifier.width(5.dp))
+                }
+            }
+            if (text != null) {
+                Text(
+                    text = text,
+                    color = if (isSelected) (if (glassConfig.isEnabled) Color.White else Color.Black) else YtTextPrimary,
+                    fontSize = 13.sp,
+                    fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium
+                )
             }
         }
     }

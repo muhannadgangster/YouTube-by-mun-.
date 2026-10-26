@@ -219,6 +219,7 @@ fun ShortsScreen(
             key = { page -> "short_page_${page}_${shortsList[page % shortsList.size].id}" },
             modifier = Modifier
                 .fillMaxSize()
+                .padding(bottom = 74.dp)
                 .testTag("shorts_vertical_pager")
         ) { page ->
             val video = shortsList[page % shortsList.size]

@@ -76,26 +76,30 @@ fun GlassSurface(
     val glassConfig = LocalLiquidGlassConfig.current
     val accentColor = LocalAppAccentColor.current
 
-    Box(
-        modifier = modifier
-            .then(
-                if (glassConfig.isEnabled) {
-                    Modifier.liquidGlassSurface(
-                        shape = shape,
-                        config = glassConfig,
-                        accentColor = accentColor,
-                        elevation = elevation,
-                        interactiveGlow = interactiveGlow
-                    )
-                } else {
-                    Modifier
-                        .shadow(elevation.coerceAtMost(3.dp), shape)
-                        .clip(shape)
-                        .background(fallbackColor)
-                        .border(1.dp, borderColor, shape)
-                }
-            )
-    ) {
+    Box(modifier = modifier) {
+        // Dedicated Background Glass Layer: Renders optical glass tilt & refraction behind content
+        Box(
+            modifier = Modifier
+                .matchParentSize()
+                .then(
+                    if (glassConfig.isEnabled) {
+                        Modifier.liquidGlassSurface(
+                            shape = shape,
+                            config = glassConfig,
+                            accentColor = accentColor,
+                            elevation = elevation,
+                            interactiveGlow = interactiveGlow
+                        )
+                    } else {
+                        Modifier
+                            .shadow(elevation.coerceAtMost(3.dp), shape)
+                            .clip(shape)
+                            .background(fallbackColor)
+                            .border(1.dp, borderColor, shape)
+                    }
+                )
+        )
+        // Foreground Content: Razor-sharp and completely undistorted
         content()
     }
 }
@@ -397,97 +401,109 @@ fun LiquidGlassSubscribeButton(
 
     Box(
         modifier = modifier
-            .then(
-                if (isGlassActive) {
-                    val subConfig = glassConfig.copy(
-                        transparency = buttonAlpha,
-                        depthEnabled = glassConfig.subscribeDepth,
-                        refractionAmount = glassConfig.subscribeRefraction,
-                        edgeHighlights = glassConfig.subscribeEdgeHighlight,
-                        glassThickness = 1.0f
-                    )
-                    Modifier.liquidGlassSurface(
-                        shape = shape,
-                        config = subConfig,
-                        accentColor = if (isSubscribed) Color.White else baseTintColor,
-                        elevation = if (glassConfig.subscribeDepth && !isSubscribed) 4.dp else 0.dp
-                    )
-                } else {
-                    Modifier
-                        .clip(shape)
-                        .background(if (isSubscribed) Color(0x33FFFFFF) else baseTintColor)
-                        .border(
-                            width = 1.dp,
-                            color = if (isSubscribed) Color.White.copy(alpha = 0.3f) else Color.Transparent,
-                            shape = shape
-                        )
-                }
-            )
+            .clip(shape)
             .clickable(
                 interactionSource = remember { MutableInteractionSource() },
                 indication = null,
                 onClick = onToggleSubscribe
             )
-            .padding(horizontal = 14.dp, vertical = 7.dp)
             .testTag(testTag),
         contentAlignment = Alignment.Center
     ) {
-        if (!customArtwork.isNullOrBlank() && java.io.File(customArtwork).exists()) {
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.Center
-            ) {
-                coil.compose.AsyncImage(
-                    model = java.io.File(customArtwork),
-                    contentDescription = if (isSubscribed) "Subscribed" else "Subscribe",
-                    modifier = Modifier
-                        .size(20.dp)
-                        .clip(CircleShape),
-                    contentScale = androidx.compose.ui.layout.ContentScale.Crop
-                )
-                Spacer(modifier = Modifier.width(6.dp))
-                Text(
-                    text = if (isSubscribed) "Subscribed" else "Subscribe",
-                    color = Color.White,
-                    fontSize = 12.sp,
-                    fontWeight = FontWeight.Bold
-                )
-            }
+        // Dedicated Background Glass Layer (Renders liquid glass tilt & optical refraction underneath)
+        if (isGlassActive) {
+            val subConfig = glassConfig.copy(
+                transparency = buttonAlpha,
+                depthEnabled = glassConfig.subscribeDepth,
+                refractionAmount = glassConfig.subscribeRefraction,
+                edgeHighlights = glassConfig.subscribeEdgeHighlight,
+                glassThickness = 1.0f
+            )
+            Box(
+                modifier = Modifier
+                    .matchParentSize()
+                    .liquidGlassSurface(
+                        shape = shape,
+                        config = subConfig,
+                        accentColor = if (isSubscribed) Color.White else baseTintColor,
+                        elevation = if (glassConfig.subscribeDepth && !isSubscribed) 4.dp else 0.dp
+                    )
+            )
         } else {
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.Center
-            ) {
-            if (isSubscribed) {
-                Icon(
-                    imageVector = Icons.Default.NotificationsActive,
-                    contentDescription = "Subscribed",
-                    tint = Color.White,
-                    modifier = Modifier.size(15.dp)
-                )
-                Spacer(modifier = Modifier.width(6.dp))
-                Text(
-                    text = "Subscribed",
-                    color = Color.White,
-                    fontSize = 12.sp,
-                    fontWeight = FontWeight.Bold
-                )
-            } else {
-                val textColor = if (baseTintColor.red > 0.8f && baseTintColor.green > 0.8f && baseTintColor.blue > 0.8f) {
-                    Color.Black // Classic high-contrast black on white pill
-                } else {
-                    Color.White
+            Box(
+                modifier = Modifier
+                    .matchParentSize()
+                    .background(if (isSubscribed) Color(0x33FFFFFF) else baseTintColor)
+                    .border(
+                        width = 1.dp,
+                        color = if (isSubscribed) Color.White.copy(alpha = 0.3f) else Color.Transparent,
+                        shape = shape
+                    )
+            )
+        }
+
+        // Foreground Layer: Subscribe text & Bell Icon stay 100% razor sharp and unwarped
+        Box(
+            modifier = Modifier.padding(horizontal = 14.dp, vertical = 7.dp),
+            contentAlignment = Alignment.Center
+        ) {
+            if (!customArtwork.isNullOrBlank() && java.io.File(customArtwork).exists()) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.Center
+                ) {
+                    coil.compose.AsyncImage(
+                        model = java.io.File(customArtwork),
+                        contentDescription = if (isSubscribed) "Subscribed" else "Subscribe",
+                        modifier = Modifier
+                            .size(20.dp)
+                            .clip(CircleShape),
+                        contentScale = androidx.compose.ui.layout.ContentScale.Crop
+                    )
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text(
+                        text = if (isSubscribed) "Subscribed" else "Subscribe",
+                        color = Color.White,
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Bold
+                    )
                 }
-                Text(
-                    text = "Subscribe",
-                    color = textColor,
-                    fontSize = 12.sp,
-                    fontWeight = FontWeight.Bold
-                )
+            } else {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.Center
+                ) {
+                    if (isSubscribed) {
+                        Icon(
+                            imageVector = Icons.Default.NotificationsActive,
+                            contentDescription = "Subscribed",
+                            tint = Color.White,
+                            modifier = Modifier.size(15.dp)
+                        )
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text(
+                            text = "Subscribed",
+                            color = Color.White,
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                    } else {
+                        val textColor = if (baseTintColor.red > 0.8f && baseTintColor.green > 0.8f && baseTintColor.blue > 0.8f) {
+                            Color.Black // Classic high-contrast black on white pill
+                        } else {
+                            Color.White
+                        }
+                        Text(
+                            text = "Subscribe",
+                            color = textColor,
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+                }
             }
         }
     }
-}
 }
 
 /**
@@ -497,36 +513,53 @@ fun LiquidGlassSubscribeButton(
 @Composable
 fun GlassTopBar(
     modifier: Modifier = Modifier,
-    shape: Shape = RoundedCornerShape(bottomStart = 16.dp, bottomEnd = 16.dp),
+    shape: Shape = RoundedCornerShape(bottomStart = 20.dp, bottomEnd = 20.dp),
     elevation: Dp = 8.dp,
     content: @Composable RowScope.() -> Unit
 ) {
     val glassConfig = LocalLiquidGlassConfig.current
     val accentColor = LocalAppAccentColor.current
 
-    Box(
-        modifier = modifier
-            .fillMaxWidth()
-            .then(
-                if (glassConfig.isEnabled) {
-                    Modifier.liquidGlassSurface(
+    Box(modifier = modifier.fillMaxWidth()) {
+        // Dedicated Background Liquid Glass Layer
+        if (glassConfig.isEnabled) {
+            Box(
+                modifier = Modifier
+                    .matchParentSize()
+                    .liquidGlassSurface(
                         shape = shape,
                         config = glassConfig,
                         accentColor = accentColor,
                         elevation = elevation
                     )
-                } else {
-                    Modifier
-                        .background(Color(0xFF0F0F0F))
-                        .border(1.dp, YtBorder, shape)
-                }
+                    .border(
+                        width = 0.8.dp,
+                        brush = Brush.verticalGradient(
+                            colors = listOf(
+                                Color.White.copy(alpha = 0.55f),
+                                Color.White.copy(alpha = 0.12f),
+                                Color.White.copy(alpha = 0.35f)
+                            )
+                        ),
+                        shape = shape
+                    )
             )
-            .padding(horizontal = 14.dp, vertical = 6.dp)
-    ) {
+        } else {
+            Box(
+                modifier = Modifier
+                    .matchParentSize()
+                    .clip(shape)
+                    .background(Color(0xFF0F0F0F))
+                    .border(1.dp, YtBorder, shape)
+            )
+        }
+
+        // Foreground: Razor-sharp top bar content
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .height(48.dp),
+                .height(48.dp)
+                .padding(horizontal = 14.dp, vertical = 6.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.SpaceBetween
         ) {
@@ -542,33 +575,51 @@ fun GlassTopBar(
 @Composable
 fun GlassMenu(
     modifier: Modifier = Modifier,
-    shape: Shape = RoundedCornerShape(16.dp),
+    shape: Shape = RoundedCornerShape(18.dp),
     elevation: Dp = 10.dp,
     content: @Composable ColumnScope.() -> Unit
 ) {
     val glassConfig = LocalLiquidGlassConfig.current
     val accentColor = LocalAppAccentColor.current
 
-    Box(
-        modifier = modifier
-            .then(
-                if (glassConfig.isEnabled) {
-                    Modifier.liquidGlassSurface(
+    Box(modifier = modifier) {
+        // Dedicated Background Liquid Glass Layer for Menu/Popup
+        if (glassConfig.isEnabled) {
+            Box(
+                modifier = Modifier
+                    .matchParentSize()
+                    .liquidGlassSurface(
                         shape = shape,
                         config = glassConfig,
                         accentColor = accentColor,
                         elevation = elevation
                     )
-                } else {
-                    Modifier
-                        .clip(shape)
-                        .background(YtSurfaceDark)
-                        .border(1.dp, YtBorder, shape)
-                }
+                    .border(
+                        width = 1.dp,
+                        brush = Brush.linearGradient(
+                            colors = listOf(
+                                Color.White.copy(alpha = 0.65f),
+                                Color.White.copy(alpha = 0.15f),
+                                Color.White.copy(alpha = 0.45f)
+                            )
+                        ),
+                        shape = shape
+                    )
             )
-            .padding(vertical = 8.dp)
-    ) {
-        Column {
+        } else {
+            Box(
+                modifier = Modifier
+                    .matchParentSize()
+                    .clip(shape)
+                    .background(YtSurfaceDark)
+                    .border(1.dp, YtBorder, shape)
+            )
+        }
+
+        // Foreground: Razor-sharp menu items
+        Column(
+            modifier = Modifier.padding(vertical = 8.dp)
+        ) {
             content()
         }
     }
