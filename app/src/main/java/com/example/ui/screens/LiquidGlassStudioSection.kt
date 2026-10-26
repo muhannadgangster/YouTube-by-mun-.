@@ -477,6 +477,20 @@ fun LazyListScope.liquidGlassStudioItems(
         )
     }
 
+    // Dedicated Control: Optical Tilt Strength ("ٹلٹ")
+    item {
+        val opticalTilt = settingsManager.opticalTiltStrength.value
+        StudioSlider(
+            label = "Optical Tilt Strength (ٹلٹ - Border Heavy)",
+            value = opticalTilt * 100f,
+            valueRange = 0f..250f,
+            unit = "%",
+            accentColor = accentColor,
+            onValueChange = { settingsManager.setOpticalTiltStrength(it / 100f) },
+            testTag = "slider_optical_tilt_strength"
+        )
+    }
+
     // Control 4: Glass Depth & Enable Depth
     item {
         StudioSwitch(

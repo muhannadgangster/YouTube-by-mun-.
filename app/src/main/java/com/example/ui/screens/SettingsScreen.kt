@@ -2,6 +2,7 @@ package com.example.ui.screens
 
 import android.widget.Toast
 import androidx.activity.compose.BackHandler
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -167,6 +168,9 @@ fun SettingsScreen(
     val lgRefraction by settingsManager.liquidGlassRefraction.collectAsStateWithLifecycle()
     val lgSpecular by settingsManager.liquidGlassSpecular.collectAsStateWithLifecycle()
     val lgBorderThickness by settingsManager.liquidGlassBorderThickness.collectAsStateWithLifecycle()
+    val lgOpticalTilt by settingsManager.opticalTiltStrength.collectAsStateWithLifecycle()
+    val lgAnimSmoothness by settingsManager.animationSmoothnessMode.collectAsStateWithLifecycle()
+    val lgLightAngle by settingsManager.liquidGlassLightAngle.collectAsStateWithLifecycle()
 
     // Neon Lights state collections
     val neonMaster by settingsManager.neonLightsMaster.collectAsStateWithLifecycle()
@@ -648,6 +652,107 @@ fun SettingsScreen(
                             value = lgRefraction,
                             onValueChange = { settingsManager.setLiquidGlassRefraction(it) },
                             valueRange = 0.1f..1.0f,
+                            colors = SliderDefaults.colors(
+                                thumbColor = Color(customAccentColorHex),
+                                activeTrackColor = Color(customAccentColorHex)
+                            )
+                        )
+                    }
+                }
+
+                // Optical Tilt Control ("ٹلٹ")
+                item {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 16.dp, vertical = 6.dp)
+                    ) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text("Optical Tilt Strength (ٹلٹ)", color = YtTextPrimary, fontSize = 14.sp, fontWeight = FontWeight.Medium)
+                                Text("Curved lens displacement: high at borders, gentle in center", color = YtTextSecondary, fontSize = 11.sp)
+                            }
+                            Text("${(lgOpticalTilt * 100).toInt()}%", color = Color(customAccentColorHex), fontSize = 13.sp, fontWeight = FontWeight.Bold)
+                        }
+                        Slider(
+                            value = lgOpticalTilt,
+                            onValueChange = { settingsManager.setOpticalTiltStrength(it) },
+                            valueRange = 0.0f..2.5f,
+                            colors = SliderDefaults.colors(
+                                thumbColor = Color(customAccentColorHex),
+                                activeTrackColor = Color(customAccentColorHex)
+                            )
+                        )
+                    }
+                }
+
+                // Animation Smoothness & Physics Mode ("سمود اینیمیشن")
+                item {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 16.dp, vertical = 6.dp)
+                    ) {
+                        Text("Animation Smoothness (سمود اینیمیشن)", color = YtTextPrimary, fontSize = 14.sp, fontWeight = FontWeight.Medium)
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Text("Configurable fluid spring damping and speed for tabs & indicators", color = YtTextSecondary, fontSize = 11.sp)
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
+                            listOf("Silky Smooth", "Bouncy Spring", "Cinematic Slow", "Instant Snappy").forEach { mode ->
+                                val isSelected = lgAnimSmoothness == mode
+                                val accentCol = Color(customAccentColorHex)
+                                Box(
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .clip(RoundedCornerShape(12.dp))
+                                        .background(if (isSelected) accentCol else YtSurfaceDark)
+                                        .border(
+                                            width = 1.dp,
+                                            color = if (isSelected) accentCol else YtBorder,
+                                            shape = RoundedCornerShape(12.dp)
+                                        )
+                                        .clickable { settingsManager.setAnimationSmoothnessMode(mode) }
+                                        .padding(vertical = 8.dp, horizontal = 4.dp),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Text(
+                                        text = mode,
+                                        fontSize = 10.sp,
+                                        fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
+                                        color = if (isSelected) Color.White else YtTextSecondary,
+                                        maxLines = 1,
+                                        textAlign = TextAlign.Center
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+
+                // Directional Light Angle Slider ("لائٹ ایڈجسٹمنٹ")
+                item {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 16.dp, vertical = 6.dp)
+                    ) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Text("Directional Light Angle", color = YtTextPrimary, fontSize = 14.sp)
+                            Text("${lgLightAngle.toInt()}°", color = Color(customAccentColorHex), fontSize = 13.sp, fontWeight = FontWeight.Bold)
+                        }
+                        Slider(
+                            value = lgLightAngle,
+                            onValueChange = { settingsManager.setLiquidGlassLightAngle(it) },
+                            valueRange = 0f..360f,
                             colors = SliderDefaults.colors(
                                 thumbColor = Color(customAccentColorHex),
                                 activeTrackColor = Color(customAccentColorHex)

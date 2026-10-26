@@ -101,27 +101,43 @@ fun NotificationsSheet(
     ModalBottomSheet(
         onDismissRequest = onDismiss,
         sheetState = sheetState,
-        containerColor = if (isGlass) Color.Transparent else YtDarkBackground,
-        shape = RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp),
+        containerColor = Color.Transparent,
+        scrimColor = Color.Black.copy(alpha = 0.20f),
+        shape = RoundedCornerShape(topStart = 20.dp, topEnd = 20.dp),
         dragHandle = null
     ) {
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .then(
-                    if (isGlass) {
-                        Modifier.liquidGlassSurface(
-                            shape = RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp),
-                            config = glassConfig,
-                            elevation = 10.dp
-                        )
-                    } else {
-                        Modifier
-                    }
-                )
-                .navigationBarsPadding()
-                .testTag("notifications_sheet")
+        Box(
+            modifier = Modifier.fillMaxSize()
         ) {
+            // Background Liquid Glass Layer: Completely clear transparent with strong optical tilt
+            Box(
+                modifier = Modifier
+                    .matchParentSize()
+                    .then(
+                        if (isGlass) {
+                            Modifier.liquidGlassSurface(
+                                shape = RoundedCornerShape(topStart = 20.dp, topEnd = 20.dp),
+                                config = glassConfig.copy(
+                                    transparency = 0.90f,
+                                    opticalTiltStrength = (glassConfig.opticalTiltStrength * 1.6f).coerceAtMost(2.8f)
+                                ),
+                                elevation = 12.dp
+                            )
+                        } else {
+                            Modifier
+                                .clip(RoundedCornerShape(topStart = 20.dp, topEnd = 20.dp))
+                                .background(YtDarkBackground.copy(alpha = 0.92f))
+                        }
+                    )
+            )
+
+            // Sharp Content Layer
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .navigationBarsPadding()
+                    .testTag("notifications_sheet")
+            ) {
             // Header (YouTube styled)
             Row(
                 modifier = Modifier
@@ -298,6 +314,7 @@ fun NotificationsSheet(
             }
         }
     }
+}
 }
 
 @Composable
