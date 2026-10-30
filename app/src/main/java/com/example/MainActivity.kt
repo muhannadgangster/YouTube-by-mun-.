@@ -55,6 +55,11 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.graphics.layer.drawLayer
+import androidx.compose.ui.graphics.rememberGraphicsLayer
+import com.example.ui.theme.LocalFeedGraphicsLayer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -479,11 +484,16 @@ fun MyTubeApp(
         return
     }
 
-    Box(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(if (hasCustomWallpaper) Color.Black else YtDarkBackground)
+    val feedGraphicsLayer = rememberGraphicsLayer()
+
+    CompositionLocalProvider(
+        LocalFeedGraphicsLayer provides feedGraphicsLayer
     ) {
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(if (hasCustomWallpaper) Color.Black else YtDarkBackground)
+        ) {
         // Persistent Custom Background Wallpaper (Preserved across app closes / restarts)
         if (hasCustomWallpaper) {
             AsyncImage(
@@ -674,6 +684,12 @@ fun MyTubeApp(
                         modifier = Modifier
                             .fillMaxSize()
                             .padding(top = animatedTopPadding)
+                            .drawWithContent {
+                                feedGraphicsLayer.record {
+                                    this@drawWithContent.drawContent()
+                                }
+                                drawLayer(feedGraphicsLayer)
+                            }
                     ) {
                         val currentGlassConfig = LocalLiquidGlassConfig.current
                         AnimatedContent(
@@ -1061,5 +1077,6 @@ fun MyTubeApp(
                 onAnimationComplete = { showSplashScreen = false }
             )
         }
+    }
     }
 }

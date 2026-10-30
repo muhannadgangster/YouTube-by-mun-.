@@ -8,6 +8,7 @@ import android.media.MediaPlayer
 import android.net.Uri
 import android.widget.VideoView
 import androidx.activity.compose.BackHandler
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
@@ -143,6 +144,7 @@ import com.example.ui.theme.YtAvatarTeal
 import com.example.ui.theme.YtBorder
 import com.example.ui.theme.YtDarkBackground
 import com.example.ui.theme.YtPillActive
+import com.example.ui.theme.LocalUiCustomization
 import com.example.ui.theme.YtPillActiveText
 import com.example.ui.theme.YtPillBackground
 import com.example.ui.theme.YtRed
@@ -396,10 +398,13 @@ fun ModernPlayerScreen(
     }
     var commentInputText by remember { mutableStateOf("") }
 
+    val customWallpaperUri by settingsManager.customBackgroundUri.collectAsStateWithLifecycle()
+    val hasCustomWallpaper = !customWallpaperUri.isNullOrBlank()
+
     Column(
         modifier = modifier
             .fillMaxSize()
-            .background(YtDarkBackground)
+            .background(if (hasCustomWallpaper) Color.Transparent else YtDarkBackground)
     ) {
         // Top 16:9 Video Player Container with Ambient Neon Edge Lights
         Box(
@@ -550,13 +555,29 @@ fun ModernPlayerScreen(
                 },
                 update = { vv ->
                     videoViewRef = vv
-                    // When video changes, stop current playback and load new video source
+                    // When video changes, stop current playback and load new video source cleanly
                     val currentTag = vv.tag as? String
                     if (currentTag != video.id) {
                         vv.tag = video.id
                         try {
                             vv.stopPlayback()
                             mediaPlayerRef = null
+                            currentPositionMs = video.watchPositionMs
+                            totalDurationMs = video.durationMs.coerceAtLeast(60000L)
+                            isPlaying = true
+
+                            vv.setOnPreparedListener { mp ->
+                                mediaPlayerRef = mp
+                                mp.isLooping = false
+                                val dur = mp.duration.toLong()
+                                if (dur > 0) totalDurationMs = dur
+                                if (video.watchPositionMs > 1000L) {
+                                    try { vv.seekTo(video.watchPositionMs.toInt()) } catch (_: Exception) {}
+                                }
+                                isPlaying = true
+                                try { mp.start() } catch (_: Exception) {}
+                            }
+
                             if (!video.id.startsWith("sample_")) {
                                 vv.setVideoURI(Uri.parse(video.uriString))
                             }

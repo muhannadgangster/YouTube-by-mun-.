@@ -347,6 +347,8 @@ class YouTubeViewModel(application: Application) : AndroidViewModel(application)
     val targetShortId: StateFlow<String?> = _targetShortId.asStateFlow()
 
     fun openShortsAt(shortItem: VideoItem) {
+        _currentlyPlaying.value = null
+        _isPlayerMinimized.value = false
         _targetShortId.value = shortItem.id
         _selectedTab.value = 1
         _isSearchActive.value = false

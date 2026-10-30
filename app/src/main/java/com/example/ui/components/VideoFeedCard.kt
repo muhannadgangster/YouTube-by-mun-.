@@ -1,8 +1,12 @@
 package com.example.ui.components
 
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.spring
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -40,8 +44,10 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -89,11 +95,26 @@ fun VideoFeedCard(
     val effectiveRadius = cardRadius.coerceAtLeast(16.dp)
     val cardShape = RoundedCornerShape(effectiveRadius)
 
+    val interactionSource = remember { MutableInteractionSource() }
+    val isPressed by interactionSource.collectIsPressedAsState()
+    val cardScale by animateFloatAsState(
+        targetValue = if (isPressed) 0.97f else 1.0f,
+        animationSpec = spring(dampingRatio = 0.75f, stiffness = 450f),
+        label = "card_touch_scale"
+    )
+
     Box(
         modifier = modifier
             .fillMaxWidth()
             .padding(horizontal = cardPadding, vertical = (cardSpacing / 2).coerceAtLeast(2.dp))
-            .clickable { onClick() }
+            .graphicsLayer {
+                scaleX = cardScale
+                scaleY = cardScale
+            }
+            .clickable(
+                interactionSource = interactionSource,
+                indication = null
+            ) { onClick() }
             .testTag("video_feed_card_${video.id}")
     ) {
         // Dedicated Background Liquid Glass Layer for Video Card
@@ -126,13 +147,15 @@ fun VideoFeedCard(
                 .fillMaxWidth()
                 .padding(vertical = if (isGlass) 6.dp else 4.dp)
         ) {
-            // 16:9 Thumbnail container
+            // 16:9 Thumbnail container - Sharp, thin rounded border, subtle shadow, no blur
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(horizontal = if (isGlass) 6.dp else 8.dp)
+                    .shadow(elevation = 2.dp, shape = RoundedCornerShape(14.dp), spotColor = Color(0x40000000))
                     .clip(RoundedCornerShape(14.dp))
                     .aspectRatio(16f / 9f)
+                    .border(0.6.dp, Color.White.copy(alpha = 0.14f), RoundedCornerShape(14.dp))
             ) {
                 VideoThumbnailView(
                     video = video,

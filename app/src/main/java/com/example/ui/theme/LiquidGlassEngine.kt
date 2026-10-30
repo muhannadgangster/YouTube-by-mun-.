@@ -146,6 +146,7 @@ data class LiquidGlassStyleConfig(
 )
 
 val LocalLiquidGlassConfig = staticCompositionLocalOf { LiquidGlassStyleConfig() }
+val LocalFeedGraphicsLayer = staticCompositionLocalOf<androidx.compose.ui.graphics.layer.GraphicsLayer?> { null }
 
 /**
  * Dimensional, physically-accurate iOS Liquid Glass Surface Modifier:

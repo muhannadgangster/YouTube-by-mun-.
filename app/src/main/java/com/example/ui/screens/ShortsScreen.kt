@@ -350,6 +350,15 @@ private fun ShortsItemPage(
         label = "rotation"
     )
 
+    DisposableEffect(Unit) {
+        onDispose {
+            try {
+                videoViewRef?.stopPlayback()
+                mediaPlayerRef = null
+            } catch (_: Exception) {}
+        }
+    }
+
     BoxWithConstraints(
         modifier = Modifier
             .fillMaxSize()
