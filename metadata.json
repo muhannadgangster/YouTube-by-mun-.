@@ -1,6 +1,6 @@
 {
-  "name": "iOS 27 Launcher",
-  "description": "Production-ready offline iOS 27 style launcher with Liquid Glass engine, Control Center, App Library, Lock Screen, and custom icon studio.",
+  "name": "MyTube",
+  "description": "Offline YouTube clone and local media player with dark UI, shorts player, custom video renaming, subscriptions, and offline library.",
   "requestFramePermissions": [],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }

@@ -41,36 +41,7 @@ class ExampleRobolectricTest {
   fun `read string from context`() {
     val context = ApplicationProvider.getApplicationContext<Context>()
     val appName = context.getString(R.string.app_name)
-    assertEquals("iOS 27 Launcher", appName)
-  }
-
-  @Test
-  fun `launcherApp custom label takes precedence over original`() {
-    val app = com.example.launcher.model.LauncherApp(
-      id = "com.android.chrome/com.google.android.apps.chrome.Main",
-      packageName = "com.android.chrome",
-      activityName = "com.google.android.apps.chrome.Main",
-      label = "Chrome",
-      customLabel = "Safari"
-    )
-    assertEquals("Safari", app.displayLabel)
-  }
-
-  @Test
-  fun `glassSettings default values are tuned for iOS look`() {
-    val settings = com.example.launcher.model.GlassSettings()
-    assertTrue(settings.isEnabled)
-    assertEquals(24f, settings.blurRadiusDp, 0.01f)
-    assertEquals(16f, settings.refractionStrength, 0.01f)
-  }
-
-  @Test
-  fun `homeConfig squircle and dark mode defaults`() {
-    val config = com.example.launcher.model.HomeScreenConfig()
-    assertEquals("SQUIRCLE", config.iconShape)
-    assertEquals("DARK", config.themeMode)
-    assertEquals(4, config.gridColumns)
-    assertEquals(5, config.gridRows)
+    assertEquals("MyTube", appName)
   }
 
   @Test

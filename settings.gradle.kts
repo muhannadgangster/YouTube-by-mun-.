@@ -22,6 +22,6 @@ dependencyResolutionManagement {
   }
 }
 
-rootProject.name = "iOS 27 Launcher"
+rootProject.name = "MyTube"
 
 include(":app")
