@@ -1,1082 +1,209 @@
 package com.example
 
-import android.Manifest
-import android.content.Context
-import android.content.Intent
-import android.app.PendingIntent
-import android.app.PictureInPictureParams
-import android.app.RemoteAction
-import android.content.BroadcastReceiver
-import android.content.IntentFilter
-import android.content.pm.PackageManager
-import android.content.res.Configuration
-import android.graphics.drawable.Icon
-import android.net.Uri
-import android.os.Build
 import android.os.Bundle
-import android.util.Rational
 import androidx.activity.ComponentActivity
-import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
-import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
-import androidx.compose.animation.slideInHorizontally
-import androidx.compose.animation.slideInVertically
-import androidx.compose.animation.slideOutHorizontally
-import androidx.compose.animation.slideOutVertically
-import androidx.compose.animation.togetherWith
-import androidx.compose.animation.core.Spring
-import androidx.compose.animation.core.spring
-import androidx.compose.animation.core.animateFloatAsState
-import com.example.ui.theme.LocalLiquidGlassConfig
-import androidx.compose.foundation.background
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.navigationBars
-import androidx.compose.foundation.layout.navigationBarsPadding
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.statusBars
-import androidx.compose.foundation.layout.windowInsetsPadding
-import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Scaffold
-import androidx.compose.material3.SnackbarHost
-import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.darkColorScheme
+import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
-import androidx.compose.runtime.CompositionLocalProvider
-import androidx.compose.ui.draw.drawWithContent
-import androidx.compose.ui.graphics.layer.drawLayer
-import androidx.compose.ui.graphics.rememberGraphicsLayer
-import com.example.ui.theme.LocalFeedGraphicsLayer
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
-import androidx.compose.ui.input.nestedscroll.NestedScrollSource
-import androidx.compose.ui.input.nestedscroll.nestedScroll
-import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.ui.unit.dp
-import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import androidx.lifecycle.viewmodel.compose.viewModel
-import com.example.data.VideoItem
-import com.example.ui.components.CommentsSheet
-import com.example.ui.components.CreateClipDialog
-import com.example.ui.components.EditProfileDialog
-import com.example.ui.components.FloatingMiniPlayer
-import com.example.ui.components.NotificationsSheet
-import com.example.ui.components.PipVideoPlayer
-import kotlinx.coroutines.flow.MutableStateFlow
-import com.example.ui.components.PlusModalSheet
-import com.example.ui.components.RenameTitleDialog
-import com.example.ui.components.YouTubeBottomBar
-import com.example.ui.components.YouTubeSplashScreen
-import com.example.ui.components.YouTubeTopBar
-import com.example.ui.screens.CustomPageRendererScreen
-import com.example.ui.screens.DownloadsScreen
-import com.example.ui.screens.FirstLaunchOnboardingScreen
-import com.example.ui.screens.HomeScreen
-import com.example.ui.screens.LibraryScreen
-import com.example.ui.screens.ModernPlayerScreen
-import com.example.ui.screens.SearchScreen
-import com.example.ui.screens.SettingsScreen
-import com.example.ui.screens.ShortsCameraScreen
-import com.example.ui.screens.ShortsScreen
-import com.example.ui.screens.SubscriptionsScreen
-import coil.compose.AsyncImage
-import coil.request.ImageRequest
-import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.graphics.Color
-import com.example.ui.theme.MyApplicationTheme
-import com.example.ui.theme.YtDarkBackground
-import com.example.ui.viewmodel.MediaScannerViewModel
-import com.example.ui.viewmodel.YouTubeViewModel
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.lifecycleScope
+import com.example.launcher.data.AppManager
+import com.example.launcher.data.LauncherPreferencesManager
+import com.example.launcher.glass.LiquidGlassSurface
+import com.example.launcher.glass.LocalLauncherGlassSettings
+import com.example.launcher.model.AppFolder
+import com.example.launcher.model.GlassSettings
+import com.example.launcher.model.HomeScreenConfig
+import com.example.launcher.model.LauncherApp
+import com.example.launcher.ui.controlcenter.ControlCenterOverlay
+import com.example.launcher.ui.home.HomeScreen
+import com.example.launcher.ui.lockscreen.LockScreenOverlay
+import com.example.launcher.ui.notifications.NotificationCenterOverlay
+import com.example.launcher.ui.search.SpotlightSearchOverlay
+import com.example.launcher.ui.settings.LauncherSettingsScreen
 import kotlinx.coroutines.launch
 
 class MainActivity : ComponentActivity() {
-    private var viewModelRef: YouTubeViewModel? = null
-    private val _isInPipMode = MutableStateFlow(false)
 
-    companion object {
-        const val ACTION_PIP_PLAY_PAUSE = "com.example.mytube.ACTION_PIP_PLAY_PAUSE"
-    }
+    private lateinit var appManager: AppManager
+    private lateinit var preferencesManager: LauncherPreferencesManager
 
-    private val pipReceiver = object : BroadcastReceiver() {
-        override fun onReceive(context: Context?, intent: Intent?) {
-            if (intent?.action == ACTION_PIP_PLAY_PAUSE) {
-                viewModelRef?.togglePlaybackPaused()
-                updatePipActions()
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        enableEdgeToEdge()
+
+        appManager = AppManager(context = applicationContext, scope = lifecycleScope)
+        preferencesManager = LauncherPreferencesManager(context = applicationContext)
+
+        setContent {
+            val scope = rememberCoroutineScope()
+
+            val rawInstalledApps by appManager.installedApps.collectAsStateWithLifecycle()
+            val homeConfig by preferencesManager.homeConfig.collectAsStateWithLifecycle(initialValue = HomeScreenConfig())
+            val glassSettings by preferencesManager.glassSettings.collectAsStateWithLifecycle(initialValue = GlassSettings())
+            val customTitles by preferencesManager.customTitles.collectAsStateWithLifecycle(initialValue = emptyMap())
+            val customIcons by preferencesManager.customIcons.collectAsStateWithLifecycle(initialValue = emptyMap())
+            val hiddenApps by preferencesManager.hiddenApps.collectAsStateWithLifecycle(initialValue = emptySet())
+            val dockAppIds by preferencesManager.dockApps.collectAsStateWithLifecycle(initialValue = emptyList())
+            val pagesLayout by preferencesManager.pagesLayout.collectAsStateWithLifecycle(initialValue = emptyList())
+            val folders by preferencesManager.folders.collectAsStateWithLifecycle(initialValue = emptyList())
+            val searchHistory by preferencesManager.searchHistory.collectAsStateWithLifecycle(initialValue = emptyList())
+
+            // Apply user-defined custom titles, custom icons, and filter out hidden apps
+            val processedApps = remember(rawInstalledApps, customTitles, customIcons, hiddenApps) {
+                rawInstalledApps
+                    .filterNot { hiddenApps.contains(it.id) }
+                    .map { app ->
+                        val customT = customTitles[app.id]
+                        val customI = customIcons[app.id]
+                        app.copy(
+                            customLabel = customT,
+                            customIconUri = customI
+                        )
+                    }
+            }
+
+            // Overlay display states
+            var isControlCenterOpen by remember { mutableStateOf(false) }
+            var isLockScreenOpen by remember { mutableStateOf(false) }
+            var isNotificationsOpen by remember { mutableStateOf(false) }
+            var isSpotlightOpen by remember { mutableStateOf(false) }
+            var isSettingsOpen by remember { mutableStateOf(false) }
+
+            // Android Hardware / Gesture Back Button handling
+            BackHandler(
+                enabled = isControlCenterOpen || isLockScreenOpen || isNotificationsOpen || isSpotlightOpen || isSettingsOpen
+            ) {
+                when {
+                    isControlCenterOpen -> isControlCenterOpen = false
+                    isLockScreenOpen -> isLockScreenOpen = false
+                    isNotificationsOpen -> isNotificationsOpen = false
+                    isSpotlightOpen -> isSpotlightOpen = false
+                    isSettingsOpen -> isSettingsOpen = false
+                }
+            }
+
+            val isDarkTheme = when (homeConfig.themeMode) {
+                "LIGHT" -> false
+                "DARK" -> true
+                else -> isSystemInDarkTheme()
+            }
+
+            val colorScheme = if (isDarkTheme) {
+                darkColorScheme(
+                    primary = Color(0xFF3B82F6),
+                    background = Color(0xFF0F0F12),
+                    surface = Color(0xFF1C1C22)
+                )
+            } else {
+                lightColorScheme(
+                    primary = Color(0xFF2563EB),
+                    background = Color(0xFFF2F2F7),
+                    surface = Color(0xFFFFFFFF)
+                )
+            }
+
+            MaterialTheme(colorScheme = colorScheme) {
+                CompositionLocalProvider(
+                    LocalLauncherGlassSettings provides glassSettings
+                ) {
+                    Box(modifier = Modifier.fillMaxSize()) {
+                        if (isSettingsOpen) {
+                            LauncherSettingsScreen(
+                                config = homeConfig,
+                                glassSettings = glassSettings,
+                                preferencesManager = preferencesManager,
+                                onBack = { isSettingsOpen = false },
+                                modifier = Modifier.fillMaxSize()
+                            )
+                        } else {
+                            HomeScreen(
+                                allApps = processedApps,
+                                appManager = appManager,
+                                config = homeConfig,
+                                preferencesManager = preferencesManager,
+                                folders = folders,
+                                pagesLayout = pagesLayout,
+                                dockAppIds = dockAppIds,
+                                onOpenControlCenter = { isControlCenterOpen = true },
+                                onOpenLockScreen = { isLockScreenOpen = true },
+                                onOpenNotifications = { isNotificationsOpen = true },
+                                onOpenSpotlight = { isSpotlightOpen = true },
+                                onOpenSettings = { isSettingsOpen = true },
+                                modifier = Modifier.fillMaxSize()
+                            )
+                        }
+
+                        // iOS 27 Control Center Overlay
+                        ControlCenterOverlay(
+                            isVisible = isControlCenterOpen,
+                            onDismiss = { isControlCenterOpen = false },
+                            isDarkMode = isDarkTheme,
+                            onToggleDarkMode = {
+                                val nextMode = if (isDarkTheme) "LIGHT" else "DARK"
+                                scope.launch {
+                                    preferencesManager.updateHomeConfig(homeConfig.copy(themeMode = nextMode))
+                                }
+                            }
+                        )
+
+                        // iOS 27 Lock Screen Experience Overlay
+                        LockScreenOverlay(
+                            isVisible = isLockScreenOpen,
+                            config = homeConfig,
+                            onUnlock = { isLockScreenOpen = false }
+                        )
+
+                        // iOS Notification Center Overlay
+                        NotificationCenterOverlay(
+                            isVisible = isNotificationsOpen,
+                            onDismiss = { isNotificationsOpen = false }
+                        )
+
+                        // iOS Spotlight Search Overlay
+                        SpotlightSearchOverlay(
+                            isVisible = isSpotlightOpen,
+                            allApps = processedApps,
+                            recentSearches = searchHistory,
+                            getIconBitmap = { appManager.getAppIconBitmap(it) },
+                            onAppClick = { app ->
+                                appManager.launchApp(app)
+                                isSpotlightOpen = false
+                            },
+                            onClearHistory = {
+                                scope.launch { preferencesManager.clearSearchHistory() }
+                            },
+                            onSearchSubmit = { term ->
+                                scope.launch { preferencesManager.addSearchHistory(term) }
+                            },
+                            onDismiss = { isSpotlightOpen = false }
+                        )
+                    }
+                }
             }
         }
     }
 
     override fun onDestroy() {
         super.onDestroy()
-        try {
-            unregisterReceiver(pipReceiver)
-        } catch (_: Exception) {}
-    }
-
-    override fun onUserLeaveHint() {
-        super.onUserLeaveHint()
-        val isPaused = viewModelRef?.isPlaybackPaused?.value ?: true
-        val hasVideo = viewModelRef?.currentlyPlaying?.value != null
-        if (hasVideo && !isPaused) {
-            enterPipMode()
-        }
-    }
-
-    override fun onPictureInPictureModeChanged(
-        isInPictureInPictureMode: Boolean,
-        newConfig: Configuration
-    ) {
-        super.onPictureInPictureModeChanged(isInPictureInPictureMode, newConfig)
-        _isInPipMode.value = isInPictureInPictureMode
-        if (!isInPictureInPictureMode) {
-            updatePipActions()
-        }
-    }
-
-    fun enterPipMode(): Boolean {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            if (!packageManager.hasSystemFeature(PackageManager.FEATURE_PICTURE_IN_PICTURE)) {
-                return false
-            }
-            val hasVideo = viewModelRef?.currentlyPlaying?.value != null
-            if (!hasVideo) return false
-            val isPaused = viewModelRef?.isPlaybackPaused?.value ?: false
-
-            val playPauseIntent = Intent(ACTION_PIP_PLAY_PAUSE).setPackage(packageName)
-            val pendingIntent = PendingIntent.getBroadcast(
-                this,
-                1001,
-                playPauseIntent,
-                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
-            )
-            val icon = Icon.createWithResource(
-                this,
-                if (isPaused) android.R.drawable.ic_media_play else android.R.drawable.ic_media_pause
-            )
-            val title = if (isPaused) "Play" else "Pause"
-            val action = RemoteAction(icon, title, title, pendingIntent)
-
-            val params = PictureInPictureParams.Builder()
-                .setAspectRatio(Rational(16, 9))
-                .setActions(listOf(action))
-                .apply {
-                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-                        setAutoEnterEnabled(true)
-                        setSeamlessResizeEnabled(true)
-                    }
-                }
-                .build()
-            return try {
-                enterPictureInPictureMode(params)
-            } catch (_: Exception) {
-                false
-            }
-        } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
-            @Suppress("DEPRECATION")
-            return try {
-                enterPictureInPictureMode()
-                true
-            } catch (_: Exception) {
-                false
-            }
-        }
-        return false
-    }
-
-    fun updatePipActions() {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            val hasVideo = viewModelRef?.currentlyPlaying?.value != null
-            if (!hasVideo) return
-            val isPaused = viewModelRef?.isPlaybackPaused?.value ?: false
-
-            val playPauseIntent = Intent(ACTION_PIP_PLAY_PAUSE).setPackage(packageName)
-            val pendingIntent = PendingIntent.getBroadcast(
-                this,
-                1001,
-                playPauseIntent,
-                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
-            )
-            val icon = Icon.createWithResource(
-                this,
-                if (isPaused) android.R.drawable.ic_media_play else android.R.drawable.ic_media_pause
-            )
-            val title = if (isPaused) "Play" else "Pause"
-            val action = RemoteAction(icon, title, title, pendingIntent)
-
-            val builder = PictureInPictureParams.Builder()
-                .setAspectRatio(Rational(16, 9))
-                .setActions(listOf(action))
-
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-                builder.setAutoEnterEnabled(!isPaused)
-                builder.setSeamlessResizeEnabled(true)
-            }
-
-            try {
-                setPictureInPictureParams(builder.build())
-            } catch (_: Exception) {}
-        }
-    }
-
-    override fun onCreate(savedInstanceState: Bundle?) {
-        super.onCreate(savedInstanceState)
-        enableEdgeToEdge()
-
-        val filter = IntentFilter(ACTION_PIP_PLAY_PAUSE)
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            registerReceiver(pipReceiver, filter, Context.RECEIVER_NOT_EXPORTED)
-        } else {
-            registerReceiver(pipReceiver, filter)
-        }
-        setContent {
-            val viewModel: YouTubeViewModel = viewModel()
-            viewModelRef = viewModel
-            val isInPipMode by _isInPipMode.collectAsStateWithLifecycle()
-            val uiTheme by viewModel.settingsManager.uiTheme.collectAsStateWithLifecycle()
-            val customAccentColorHex by viewModel.settingsManager.customAccentColorHex.collectAsStateWithLifecycle()
-
-            // Liquid Glass & Neon config state collection
-            val lgMaster by viewModel.settingsManager.liquidGlassMaster.collectAsStateWithLifecycle()
-            val lgQuality by viewModel.settingsManager.liquidGlassQuality.collectAsStateWithLifecycle()
-            val lgTransparencyInt by viewModel.settingsManager.liquidGlassTransparencyInt.collectAsStateWithLifecycle()
-            val lgBlurInt by viewModel.settingsManager.liquidGlassBlurInt.collectAsStateWithLifecycle()
-            val lgRefractionInt by viewModel.settingsManager.liquidGlassRefractionInt.collectAsStateWithLifecycle()
-            val lgLensMagnifyInt by viewModel.settingsManager.liquidGlassLensMagnifyInt.collectAsStateWithLifecycle()
-            val lgEdgeHighlightInt by viewModel.settingsManager.liquidGlassEdgeHighlightInt.collectAsStateWithLifecycle()
-            val lgReflectionInt by viewModel.settingsManager.liquidGlassReflectionInt.collectAsStateWithLifecycle()
-            val lgDarknessInt by viewModel.settingsManager.liquidGlassDarknessInt.collectAsStateWithLifecycle()
-            val lgCornerRadiusInt by viewModel.settingsManager.liquidGlassCornerRadiusInt.collectAsStateWithLifecycle()
-            val lgAnimSpeedInt by viewModel.settingsManager.liquidGlassAnimSpeedInt.collectAsStateWithLifecycle()
-            val lgTintColorHex by viewModel.settingsManager.liquidGlassTintColorHex.collectAsStateWithLifecycle()
-
-            val neonMaster by viewModel.settingsManager.neonLightsMaster.collectAsStateWithLifecycle()
-            val neonColorHex by viewModel.settingsManager.neonColorHex.collectAsStateWithLifecycle()
-            val neonIntensity by viewModel.settingsManager.neonIntensity.collectAsStateWithLifecycle()
-            val neonAnimated by viewModel.settingsManager.neonAnimated.collectAsStateWithLifecycle()
-            val neonSpeed by viewModel.settingsManager.neonAnimationSpeed.collectAsStateWithLifecycle()
-
-            val glassConfig = com.example.ui.theme.LiquidGlassStyleConfig(
-                isEnabled = lgMaster,
-                quality = lgQuality,
-                transparency = lgTransparencyInt.toFloat(),
-                blur = lgBlurInt.toFloat(),
-                refraction = lgRefractionInt.toFloat(),
-                lensMagnify = lgLensMagnifyInt.toFloat(),
-                edgeHighlight = lgEdgeHighlightInt.toFloat(),
-                reflection = lgReflectionInt.toFloat(),
-                tintDarkness = lgDarknessInt.toFloat(),
-                cornerRadiusDp = lgCornerRadiusInt.toFloat(),
-                animSpeed = lgAnimSpeedInt.toFloat(),
-                glassTintColorHex = lgTintColorHex,
-                isDarkGlass = uiTheme != "Liquid Glass (Light)" && uiTheme != "Light Mode",
-                neonEnabled = neonMaster,
-                neonColorHex = neonColorHex,
-                neonIntensity = neonIntensity,
-                neonAnimated = neonAnimated,
-                neonAnimationSpeed = neonSpeed
-            )
-
-            val homeCardCornerRadius by viewModel.settingsManager.homeCardCornerRadius.collectAsStateWithLifecycle()
-            val homeCardSpacing by viewModel.settingsManager.homeCardSpacing.collectAsStateWithLifecycle()
-            val homeCardPadding by viewModel.settingsManager.homeCardPadding.collectAsStateWithLifecycle()
-            val homeGlassCards by viewModel.settingsManager.homeGlassCards.collectAsStateWithLifecycle()
-            val shortsActionButtonStyle by viewModel.settingsManager.shortsActionButtonStyle.collectAsStateWithLifecycle()
-            val shortsActionIconScale by viewModel.settingsManager.shortsActionIconScale.collectAsStateWithLifecycle()
-            val shortsOverlayAlpha by viewModel.settingsManager.shortsOverlayAlpha.collectAsStateWithLifecycle()
-            val navBarHeightDp by viewModel.settingsManager.navBarHeightDp.collectAsStateWithLifecycle()
-            val navBarGlassEnabled by viewModel.settingsManager.navBarGlassEnabled.collectAsStateWithLifecycle()
-            val navBarIndicatorStyle by viewModel.settingsManager.navBarIndicatorStyle.collectAsStateWithLifecycle()
-            val navBarShowLabels by viewModel.settingsManager.navBarShowLabels.collectAsStateWithLifecycle()
-            val profileHeaderGlassStyle by viewModel.settingsManager.profileHeaderGlassStyle.collectAsStateWithLifecycle()
-            val profileAvatarCornerRadius by viewModel.settingsManager.profileAvatarCornerRadius.collectAsStateWithLifecycle()
-            val profileActionButtonsGlass by viewModel.settingsManager.profileActionButtonsGlass.collectAsStateWithLifecycle()
-            val notifCardCornerRadius by viewModel.settingsManager.notificationCardCornerRadius.collectAsStateWithLifecycle()
-            val notifGlassCards by viewModel.settingsManager.notificationGlassCards.collectAsStateWithLifecycle()
-            val notifCardSpacing by viewModel.settingsManager.notificationCardSpacing.collectAsStateWithLifecycle()
-
-            val uiCustomization = com.example.ui.theme.UiCustomizationConfig(
-                homeCardCornerRadiusDp = homeCardCornerRadius,
-                homeCardSpacingDp = homeCardSpacing,
-                homeCardPaddingDp = homeCardPadding,
-                homeGlassCards = homeGlassCards,
-                shortsActionButtonStyle = shortsActionButtonStyle,
-                shortsActionIconScale = shortsActionIconScale,
-                shortsOverlayAlpha = shortsOverlayAlpha,
-                navBarHeightDp = navBarHeightDp,
-                navBarGlassEnabled = navBarGlassEnabled,
-                navBarIndicatorStyle = navBarIndicatorStyle,
-                navBarShowLabels = navBarShowLabels,
-                profileHeaderGlassStyle = profileHeaderGlassStyle,
-                profileAvatarCornerRadius = profileAvatarCornerRadius,
-                profileActionButtonsGlass = profileActionButtonsGlass,
-                notifCardCornerRadiusDp = notifCardCornerRadius,
-                notifGlassCards = notifGlassCards,
-                notifCardSpacingDp = notifCardSpacing
-            )
-
-            MyApplicationTheme(
-                uiTheme = uiTheme,
-                customAccentColorHex = customAccentColorHex,
-                liquidGlassConfig = glassConfig,
-                uiCustomization = uiCustomization
-            ) {
-                MyTubeApp(
-                    viewModel = viewModel,
-                    isInPipMode = isInPipMode,
-                    onEnterPip = { enterPipMode() }
-                )
-            }
-        }
-    }
-}
-
-@Composable
-fun MyTubeApp(
-    viewModel: YouTubeViewModel = viewModel(),
-    mediaScannerViewModel: MediaScannerViewModel = viewModel(),
-    isInPipMode: Boolean = false,
-    onEnterPip: () -> Unit = {}
-) {
-    val context = LocalContext.current
-    val coroutineScope = rememberCoroutineScope()
-    val snackbarHostState = remember { SnackbarHostState() }
-
-    // Video picker launcher for Add (+) navigation button
-    val videoPickerLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.GetContent()
-    ) { uri: Uri? ->
-        if (uri != null) {
-            viewModel.importGalleryVideo(uri)
-        }
-    }
-
-    // State collections from ViewModel
-    val allVideos by viewModel.allVideos.collectAsStateWithLifecycle()
-    val filteredVideos by viewModel.filteredVideos.collectAsStateWithLifecycle()
-    val shortsVideos by viewModel.shortsVideos.collectAsStateWithLifecycle()
-    val subscribedVideos by viewModel.subscribedVideos.collectAsStateWithLifecycle()
-    val likedVideos by viewModel.likedVideos.collectAsStateWithLifecycle()
-    val watchLaterVideos by viewModel.watchLaterVideos.collectAsStateWithLifecycle()
-    val downloadedVideos by viewModel.downloadedVideos.collectAsStateWithLifecycle()
-    val historyVideos by viewModel.historyVideos.collectAsStateWithLifecycle()
-    val shortsFeedGridCount by viewModel.settingsManager.shortsFeedGridCount.collectAsStateWithLifecycle()
-    val showDownloadsScreen by viewModel.showDownloadsScreen.collectAsStateWithLifecycle()
-
-    val isScanningMedia by mediaScannerViewModel.isScanning.collectAsStateWithLifecycle()
-    val mediaScanStatus by mediaScannerViewModel.statusMessage.collectAsStateWithLifecycle()
-
-    val selectedTab by viewModel.selectedTab.collectAsStateWithLifecycle()
-    val selectedFilter by viewModel.selectedFilter.collectAsStateWithLifecycle()
-    val isSearchActive by viewModel.isSearchActive.collectAsStateWithLifecycle()
-    val searchQuery by viewModel.searchQuery.collectAsStateWithLifecycle()
-    val searchHistory by viewModel.searchHistory.collectAsStateWithLifecycle()
-    val targetShortId by viewModel.targetShortId.collectAsStateWithLifecycle()
-    val currentlyPlaying by viewModel.currentlyPlaying.collectAsStateWithLifecycle()
-    val isPlayerMinimized by viewModel.isPlayerMinimized.collectAsStateWithLifecycle()
-    val isPlaybackPaused by viewModel.isPlaybackPaused.collectAsStateWithLifecycle()
-
-    val showEditProfileDialog by viewModel.showEditProfileDialog.collectAsStateWithLifecycle()
-    val userName by viewModel.userName.collectAsStateWithLifecycle()
-    val userHandle by viewModel.userHandle.collectAsStateWithLifecycle()
-    val userAvatarUri by viewModel.userAvatarUri.collectAsStateWithLifecycle()
-
-    val editingVideo by viewModel.editingVideo.collectAsStateWithLifecycle()
-    val showPlusSheet by viewModel.showPlusSheet.collectAsStateWithLifecycle()
-    val commentingVideo by viewModel.commentingVideo.collectAsStateWithLifecycle()
-    val activeComments by viewModel.activeComments.collectAsStateWithLifecycle()
-    val showNotificationsSheet by viewModel.showNotificationsSheet.collectAsStateWithLifecycle()
-    val notificationsList by viewModel.notifications.collectAsStateWithLifecycle()
-    val unreadNotificationCount by viewModel.unreadNotificationCount.collectAsStateWithLifecycle()
-    val showSettings by viewModel.showSettings.collectAsStateWithLifecycle()
-    val showShortsCamera by viewModel.showShortsCamera.collectAsStateWithLifecycle()
-    val isRefreshing by viewModel.isRefreshing.collectAsStateWithLifecycle()
-
-    val customBackgroundUri by viewModel.settingsManager.customBackgroundUri.collectAsStateWithLifecycle()
-    val customBackgroundDim by viewModel.settingsManager.customBackgroundDim.collectAsStateWithLifecycle()
-    val currentUiTheme by viewModel.settingsManager.uiTheme.collectAsStateWithLifecycle()
-
-    val customIcons by viewModel.interfaceBuilderManager.customIcons.collectAsStateWithLifecycle()
-    val activeCustomPage by viewModel.activeCustomPage.collectAsStateWithLifecycle()
-
-    var showCreateClipDialog by remember { mutableStateOf(false) }
-    var showSplashScreen by remember { mutableStateOf(true) }
-
-    // Runtime Permission Request on App Launch (Handles Videos, Images, Audio, & Notifications)
-    val permissionsToRequest = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-        arrayOf(
-            Manifest.permission.READ_MEDIA_VIDEO,
-            Manifest.permission.READ_MEDIA_IMAGES,
-            Manifest.permission.READ_MEDIA_AUDIO,
-            Manifest.permission.POST_NOTIFICATIONS
-        )
-    } else {
-        arrayOf(Manifest.permission.READ_EXTERNAL_STORAGE)
-    }
-
-    val permissionLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.RequestMultiplePermissions()
-    ) { results ->
-        val granted = results.values.any { it }
-        if (granted) {
-            mediaScannerViewModel.scanDeviceMedia()
-            viewModel.scanStorage()
-        }
-    }
-
-    LaunchedEffect(Unit) {
-        permissionLauncher.launch(permissionsToRequest)
-        // Auto-reload on app opening
-        mediaScannerViewModel.scanDeviceMedia()
-        viewModel.refreshFeed()
-    }
-
-    fun shareVideo(video: VideoItem) {
-        val shareIntent = Intent().apply {
-            action = Intent.ACTION_SEND
-            putExtra(
-                Intent.EXTRA_TEXT,
-                "Check out \"${video.displayTitle}\" by ${video.displayChannelName} on MyTube!"
-            )
-            type = "text/plain"
-        }
-        context.startActivity(Intent.createChooser(shareIntent, "Share video"))
-    }
-
-    val lgMaster by viewModel.settingsManager.liquidGlassMaster.collectAsStateWithLifecycle()
-    val hasCustomWallpaper = !customBackgroundUri.isNullOrBlank()
-    val isGlassTheme = lgMaster && currentUiTheme.contains("Liquid Glass")
-
-    val onboardingCompleted by viewModel.settingsManager.onboardingCompleted.collectAsStateWithLifecycle()
-
-    if (!onboardingCompleted) {
-        FirstLaunchOnboardingScreen(
-            settingsManager = viewModel.settingsManager,
-            onComplete = {}
-        )
-        return
-    }
-
-    if (isInPipMode && currentlyPlaying != null) {
-        PipVideoPlayer(
-            video = currentlyPlaying!!,
-            isPaused = isPlaybackPaused,
-            onProgressUpdate = { pos -> viewModel.recordProgress(currentlyPlaying!!, pos) },
-            modifier = Modifier.fillMaxSize()
-        )
-        return
-    }
-
-    val feedGraphicsLayer = rememberGraphicsLayer()
-
-    CompositionLocalProvider(
-        LocalFeedGraphicsLayer provides feedGraphicsLayer
-    ) {
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .background(if (hasCustomWallpaper) Color.Black else YtDarkBackground)
-        ) {
-        // Persistent Custom Background Wallpaper (Preserved across app closes / restarts)
-        if (hasCustomWallpaper) {
-            AsyncImage(
-                model = ImageRequest.Builder(LocalContext.current)
-                    .data(Uri.parse(customBackgroundUri))
-                    .crossfade(true)
-                    .build(),
-                contentDescription = "Custom Wallpaper",
-                contentScale = ContentScale.Crop,
-                modifier = Modifier.fillMaxSize()
-            )
-            // User-adjustable dimming scrim for contrast
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .background(Color.Black.copy(alpha = customBackgroundDim))
-            )
-        }
-
-        if (showShortsCamera) {
-            // Full YouTube Shorts Creation Camera Interface (Reference UI)
-            ShortsCameraScreen(
-                onClose = { viewModel.setShortsCameraOpen(false) },
-                onShortCreated = { newShort ->
-                    viewModel.setShortsCameraOpen(false)
-                    viewModel.selectTab(1)
-                    coroutineScope.launch {
-                        snackbarHostState.showSnackbar("Short created: ${newShort.displayTitle}")
-                    }
-                },
-                onAddFromGallery = { uri ->
-                    viewModel.setShortsCameraOpen(false)
-                    viewModel.importShortMedia(uri)
-                    coroutineScope.launch {
-                        snackbarHostState.showSnackbar("Added clip to Shorts feed")
-                    }
-                },
-                viewModel = viewModel,
-                modifier = Modifier.fillMaxSize()
-            )
-        } else if (showSettings) {
-            // Full YouTube Settings Screen
-            SettingsScreen(
-                settingsManager = viewModel.settingsManager,
-                interfaceBuilderManager = viewModel.interfaceBuilderManager,
-                onBack = { viewModel.setSettingsOpen(false) },
-                onClearWatchHistory = {
-                    viewModel.clearWatchHistory()
-                    coroutineScope.launch {
-                        snackbarHostState.showSnackbar("Watch history cleared")
-                    }
-                },
-                onClearSearchHistory = {
-                    viewModel.updateSearchQuery("")
-                    coroutineScope.launch {
-                        snackbarHostState.showSnackbar("Search history cleared")
-                    }
-                },
-                onDeleteAllDownloads = {
-                    viewModel.deleteAllDownloads()
-                    coroutineScope.launch {
-                        snackbarHostState.showSnackbar("All downloads removed")
-                    }
-                },
-                modifier = Modifier.fillMaxSize()
-            )
-        } else if (isSearchActive) {
-            // Dedicated Full Search Screen View
-            SearchScreen(
-                searchQuery = searchQuery,
-                searchHistory = searchHistory,
-                allVideos = allVideos,
-                onQueryChange = { viewModel.updateSearchQuery(it) },
-                onSubmitSearch = { viewModel.submitSearch(it) },
-                onRemoveHistoryItem = { viewModel.removeSearchQuery(it) },
-                onClearHistory = { viewModel.clearSearchHistory() },
-                onVideoClick = { video ->
-                    viewModel.setSearchActive(false)
-                    viewModel.playVideo(video)
-                },
-                onBack = {
-                    viewModel.setSearchActive(false)
-                },
-                settingsManager = viewModel.settingsManager,
-                modifier = Modifier.fillMaxSize()
-            )
-        } else if (currentlyPlaying != null && !isPlayerMinimized) {
-            // Full Video Player View
-            ModernPlayerScreen(
-                video = currentlyPlaying!!,
-                upNextVideos = allVideos,
-                shortsList = shortsVideos,
-                onClose = { viewModel.closePlayer() },
-                onMinimize = { viewModel.minimizePlayer() },
-                onEditTitleClick = { viewModel.openRenameDialog(currentlyPlaying!!) },
-                onToggleLike = { viewModel.toggleLike(currentlyPlaying!!) },
-                onToggleDislike = { viewModel.toggleDislike(currentlyPlaying!!) },
-                onToggleSubscribe = { viewModel.toggleSubscribe(currentlyPlaying!!) },
-                onToggleDownload = {
-                    viewModel.toggleDownloaded(currentlyPlaying!!)
-                    coroutineScope.launch {
-                        val isDl = !(currentlyPlaying!!.isDownloaded)
-                        snackbarHostState.showSnackbar(if (isDl) "Saved to Downloads" else "Removed from Downloads")
-                    }
-                },
-                onOpenComments = { viewModel.openComments(currentlyPlaying!!) },
-                onShare = { shareVideo(currentlyPlaying!!) },
-                onSelectUpNext = { nextVideo -> viewModel.playVideo(nextVideo) },
-                onShortClick = { shortVideo -> viewModel.openShortsAt(shortVideo) },
-                onProgressUpdate = { pos -> viewModel.recordProgress(currentlyPlaying!!, pos) },
-                onEnterPip = onEnterPip,
-                modifier = Modifier.fillMaxSize()
-            )
-        } else {
-            // Density & Metrics for Independent Liquid Glass Top Bar Animation
-            val density = LocalDensity.current
-            val statusBarTopDp = with(density) { WindowInsets.statusBars.getTop(density).toDp() }
-            val topBarTotalHeightDp = 56.dp + statusBarTopDp
-            val topBarTotalHeightPx = with(density) { topBarTotalHeightDp.toPx() }
-
-            val homeListState = rememberLazyListState()
-            var topBarOffsetPx by remember { mutableFloatStateOf(0f) }
-
-            val homeNestedScrollConnection = remember(topBarTotalHeightPx) {
-                object : NestedScrollConnection {
-                    override fun onPreScroll(available: Offset, source: NestedScrollSource): Offset {
-                        if (selectedTab == 0) {
-                            val delta = available.y
-                            if (kotlin.math.abs(delta) > 0.5f) {
-                                val newOffset = (topBarOffsetPx + delta).coerceIn(-topBarTotalHeightPx, 0f)
-                                topBarOffsetPx = newOffset
-                            }
-                        }
-                        return Offset.Zero
-                    }
-                }
-            }
-
-            LaunchedEffect(homeListState.firstVisibleItemIndex, homeListState.firstVisibleItemScrollOffset) {
-                if (homeListState.firstVisibleItemIndex == 0 && homeListState.firstVisibleItemScrollOffset == 0) {
-                    topBarOffsetPx = 0f
-                }
-            }
-
-            LaunchedEffect(selectedTab) {
-                if (selectedTab != 0) {
-                    topBarOffsetPx = 0f
-                }
-            }
-
-            val animatedTopBarOffset by animateFloatAsState(
-                targetValue = topBarOffsetPx,
-                animationSpec = spring(
-                    dampingRatio = Spring.DampingRatioNoBouncy,
-                    stiffness = Spring.StiffnessMedium
-                ),
-                label = "top_bar_offset"
-            )
-
-            val topBarFraction = if (topBarTotalHeightPx > 0f) {
-                ((topBarTotalHeightPx + animatedTopBarOffset) / topBarTotalHeightPx).coerceIn(0f, 1f)
-            } else 1f
-
-            // Main App Shell with Floating Liquid Glass Navigation Bar
-            Scaffold(
-                containerColor = if (hasCustomWallpaper || isGlassTheme) Color.Transparent else MaterialTheme.colorScheme.background,
-                snackbarHost = { SnackbarHost(snackbarHostState) },
-                bottomBar = {} // Solid black bar removed: Floating bar is placed as overlay over scrolling feed
-            ) { paddingValues ->
-                val animatedTopPadding = if (selectedTab == 0) {
-                    topBarTotalHeightDp * topBarFraction
-                } else if (selectedTab == 3) {
-                    topBarTotalHeightDp
-                } else {
-                    0.dp
-                }
-
-                Box(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .then(
-                            if (selectedTab == 0) {
-                                Modifier.nestedScroll(homeNestedScrollConnection)
-                            } else Modifier
-                        )
-                ) {
-                    Box(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .padding(top = animatedTopPadding)
-                            .drawWithContent {
-                                feedGraphicsLayer.record {
-                                    this@drawWithContent.drawContent()
-                                }
-                                drawLayer(feedGraphicsLayer)
-                            }
-                    ) {
-                        val currentGlassConfig = LocalLiquidGlassConfig.current
-                        AnimatedContent(
-                            targetState = selectedTab,
-                            transitionSpec = {
-                                if (currentGlassConfig.springPhysicsEnabled) {
-                                    val direction = if (targetState > initialState) 1 else -1
-                                    (slideInHorizontally(
-                                        animationSpec = spring(
-                                            dampingRatio = Spring.DampingRatioLowBouncy,
-                                            stiffness = Spring.StiffnessMediumLow
-                                        ),
-                                        initialOffsetX = { fullWidth -> fullWidth * direction / 3 }
-                                    ) + fadeIn(
-                                        animationSpec = spring(
-                                            dampingRatio = Spring.DampingRatioNoBouncy,
-                                            stiffness = Spring.StiffnessMediumLow
-                                        )
-                                    )).togetherWith(
-                                        slideOutHorizontally(
-                                            animationSpec = spring(
-                                                dampingRatio = Spring.DampingRatioNoBouncy,
-                                                stiffness = Spring.StiffnessMediumLow
-                                            ),
-                                            targetOffsetX = { fullWidth -> -fullWidth * direction / 4 }
-                                        ) + fadeOut(
-                                            animationSpec = spring(
-                                                dampingRatio = Spring.DampingRatioNoBouncy,
-                                                stiffness = Spring.StiffnessMediumLow
-                                            )
-                                        )
-                                    )
-                                } else {
-                                    fadeIn() togetherWith fadeOut()
-                                }
-                            },
-                            label = "tab_spring_transition"
-                        ) { tab ->
-                            when (tab) {
-                                0 -> HomeScreen(
-                                    videos = filteredVideos,
-                                    shortsList = shortsVideos,
-                                    selectedFilter = selectedFilter,
-                                    isRefreshing = isRefreshing,
-                                    isScanningMedia = isScanningMedia,
-                                    onRefresh = {
-                                        viewModel.refreshFeed()
-                                        coroutineScope.launch {
-                                            snackbarHostState.showSnackbar("Videos refreshed & mixed! 🔀")
-                                        }
-                                    },
-                                    onFilterSelected = { viewModel.selectFilter(it) },
-                                    onVideoClick = { viewModel.playVideo(it) },
-                                    onShortClick = { viewModel.openShortsAt(it) },
-                                    onEditTitleClick = { viewModel.openRenameDialog(it) },
-                                    onToggleWatchLater = {
-                                        viewModel.toggleWatchLater(it)
-                                        coroutineScope.launch {
-                                            val isWl = !(it.isWatchLater)
-                                            snackbarHostState.showSnackbar(if (isWl) "Saved to Watch Later" else "Removed from Watch Later")
-                                        }
-                                    },
-                                    onToggleSubscribe = {
-                                        viewModel.toggleSubscribe(it)
-                                        coroutineScope.launch {
-                                            val isSub = !(it.isSubscribed)
-                                            snackbarHostState.showSnackbar(if (isSub) "Subscribed to ${it.displayChannelName}" else "Unsubscribed")
-                                        }
-                                    },
-                                    onToggleDownload = {
-                                        viewModel.toggleDownloaded(it)
-                                        coroutineScope.launch {
-                                            val isDl = !(it.isDownloaded)
-                                            snackbarHostState.showSnackbar(if (isDl) "Saved to Downloads" else "Removed from Downloads")
-                                        }
-                                    },
-                                    onShareClick = { shareVideo(it) },
-                                    onScanStorageClick = {
-                                        mediaScannerViewModel.scanDeviceMedia()
-                                        viewModel.scanStorage()
-                                    },
-                                    shortsGridCount = shortsFeedGridCount,
-                                    listState = homeListState
-                                )
-
-                                1 -> ShortsScreen(
-                                    shortsList = if (shortsVideos.isNotEmpty()) shortsVideos else allVideos,
-                                    initialShortId = targetShortId,
-                                    onConsumedInitialShort = { viewModel.clearTargetShort() },
-                                    onToggleLike = { viewModel.toggleLike(it) },
-                                    onToggleDislike = { viewModel.toggleDislike(it) },
-                                    onToggleSubscribe = { viewModel.toggleSubscribe(it) },
-                                    onOpenComments = { viewModel.openComments(it) },
-                                    onToggleSave = {
-                                        viewModel.toggleWatchLater(it)
-                                        coroutineScope.launch {
-                                            val isWl = !(it.isWatchLater)
-                                            snackbarHostState.showSnackbar(if (isWl) "Saved to Watch Later" else "Removed from Watch Later")
-                                        }
-                                    },
-                                    onRemixClick = { viewModel.setShortsCameraOpen(true) },
-                                    onEditTitle = { viewModel.openRenameDialog(it) },
-                                    onShare = { shareVideo(it) },
-                                    onSearchClick = { viewModel.setSearchActive(true) },
-                                    onCameraClick = { viewModel.setShortsCameraOpen(true) },
-                                    onNotificationsClick = { viewModel.setNotificationsSheetOpen(true) },
-                                    unreadNotificationCount = unreadNotificationCount,
-                                    onToggleDownload = { viewModel.toggleDownloaded(it) },
-                                    onBackClick = { viewModel.selectTab(0) },
-                                    settingsManager = viewModel.settingsManager
-                                )
-
-                                3 -> SubscriptionsScreen(
-                                    subscribedVideos = subscribedVideos,
-                                    onVideoClick = { viewModel.playVideo(it) },
-                                    onEditTitleClick = { viewModel.openRenameDialog(it) },
-                                    onToggleWatchLater = { viewModel.toggleWatchLater(it) },
-                                    onToggleSubscribe = { viewModel.toggleSubscribe(it) },
-                                    onToggleDownload = { viewModel.toggleDownloaded(it) },
-                                    onShareClick = { shareVideo(it) },
-                                    onExploreClick = { viewModel.selectTab(0) },
-                                    settingsManager = viewModel.settingsManager
-                                )
-
-                                4 -> {
-                                    if (showDownloadsScreen) {
-                                        DownloadsScreen(
-                                            downloadedVideos = downloadedVideos,
-                                            onVideoClick = { viewModel.playVideo(it) },
-                                            onRemoveDownload = { viewModel.toggleDownloaded(it) },
-                                            onDeleteAllDownloads = { viewModel.deleteAllDownloads() },
-                                            onShareClick = { shareVideo(it) },
-                                            onBack = { viewModel.setDownloadsScreenOpen(false) },
-                                            onExploreVideos = {
-                                                viewModel.setDownloadsScreenOpen(false)
-                                                viewModel.selectTab(0)
-                                            },
-                                            modifier = Modifier.fillMaxSize()
-                                        )
-                                    } else {
-                                        LibraryScreen(
-                                            historyVideos = historyVideos,
-                                            watchLaterVideos = watchLaterVideos,
-                                            downloadedVideos = downloadedVideos,
-                                            likedVideos = likedVideos,
-                                            allVideos = allVideos,
-                                            userName = userName,
-                                            userHandle = userHandle,
-                                            userAvatarUri = userAvatarUri,
-                                            onEditProfileClick = { viewModel.setEditProfileDialogOpen(true) },
-                                            onVideoClick = { viewModel.playVideo(it) },
-                                            onSearchClick = {
-                                                viewModel.selectTab(0)
-                                                viewModel.setSearchActive(true)
-                                            },
-                                            onNotificationsClick = { viewModel.setNotificationsSheetOpen(true) },
-                                            onSettingsClick = { viewModel.setSettingsOpen(true) },
-                                            unreadNotificationCount = unreadNotificationCount,
-                                            onDownloadsClick = { viewModel.setDownloadsScreenOpen(true) }
-                                        )
-                                    }
-                                }
-                            }
-                        }
-                    }
-
-                    // Top Bar Liquid Glass Overlay with dynamic scroll translation and alpha
-                    if (selectedTab != 1 && selectedTab != 4) {
-                        val barOffset = if (selectedTab == 0) animatedTopBarOffset else 0f
-                        val barAlpha = if (selectedTab == 0) topBarFraction else 1f
-                        YouTubeTopBar(
-                            isSearchActive = isSearchActive,
-                            searchQuery = searchQuery,
-                            onSearchQueryChange = { viewModel.updateSearchQuery(it) },
-                            onSearchToggle = { viewModel.setSearchActive(it) },
-                            onNotificationsClick = { viewModel.setNotificationsSheetOpen(true) },
-                            onProfileClick = { viewModel.selectTab(4) },
-                            onShuffleClick = {
-                                viewModel.shuffleVideos()
-                                coroutineScope.launch {
-                                    snackbarHostState.showSnackbar("Videos & Shorts shuffled! 🔀")
-                                }
-                            },
-                            unreadNotificationCount = unreadNotificationCount,
-                            userAvatarUri = userAvatarUri,
-                            userName = userName,
-                            customIcons = customIcons,
-                            onCustomIconClick = { customIcon ->
-                                viewModel.executeIconAction(
-                                    actionType = customIcon.actionType,
-                                    actionTarget = customIcon.actionTarget,
-                                    onNotice = { msg ->
-                                        coroutineScope.launch {
-                                            snackbarHostState.showSnackbar(msg)
-                                        }
-                                    }
-                                )
-                            },
-                            modifier = Modifier
-                                .align(Alignment.TopCenter)
-                                .graphicsLayer {
-                                    translationY = barOffset
-                                    alpha = barAlpha
-                                }
-                        )
-                    }
-
-                    // Floating Liquid Glass Navigation Bar (No solid black background container)
-                    // Content and videos scroll directly underneath it, with real optical tilt refraction!
-                    Box(
-                        modifier = Modifier
-                            .align(Alignment.BottomCenter)
-                            .fillMaxWidth()
-                            .navigationBarsPadding(),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        YouTubeBottomBar(
-                            selectedTab = selectedTab,
-                            onTabSelected = { viewModel.selectTab(it) },
-                            onAddClick = { videoPickerLauncher.launch("video/*") },
-                            modifier = Modifier.fillMaxWidth()
-                        )
-                    }
-                }
-            }
-        }
-
-        // Rename Title & Hashtags Dialog (Working Custom Title Feature)
-        if (editingVideo != null) {
-            RenameTitleDialog(
-                video = editingVideo!!,
-                onDismiss = { viewModel.dismissRenameDialog() },
-                onSave = { newTitle, newHashtags ->
-                    viewModel.saveCustomTitleAndHashtags(newTitle, newHashtags)
-                    coroutineScope.launch {
-                        snackbarHostState.showSnackbar("Title & Hashtags updated")
-                    }
-                }
-            )
-        }
-
-        // Center Plus (+) Modal Sheet with Real Import & Creation Options
-        if (showPlusSheet) {
-            PlusModalSheet(
-                onDismiss = { viewModel.setPlusSheetOpen(false) },
-                onVideoSelected = { uri ->
-                    viewModel.importGalleryVideo(uri)
-                    coroutineScope.launch {
-                        snackbarHostState.showSnackbar("Importing video from gallery...")
-                    }
-                },
-                onShortMediaSelected = { uri ->
-                    viewModel.importShortMedia(uri)
-                    coroutineScope.launch {
-                        snackbarHostState.showSnackbar("Added 5-10s clip to Shorts feed")
-                    }
-                },
-                onPhotosSelected = { uris ->
-                    viewModel.createPhotoSlideshow(
-                        photoUris = uris,
-                        title = "Gallery Story | Ken Burns #Shorts",
-                        hashtags = "#Shorts #PhotoStory #Memories #Gallery"
-                    )
-                    coroutineScope.launch {
-                        snackbarHostState.showSnackbar("Created animated Photo Story")
-                    }
-                },
-                onScanStorage = {
-                    mediaScannerViewModel.scanDeviceMedia()
-                    viewModel.scanStorage()
-                    coroutineScope.launch {
-                        snackbarHostState.showSnackbar("Scanning local device storage...")
-                    }
-                },
-                onCreateShortsClip = {
-                    showCreateClipDialog = true
-                }
-            )
-        }
-
-        // Create Shorts Clip Dialog
-        if (showCreateClipDialog) {
-            CreateClipDialog(
-                videos = allVideos,
-                onDismiss = { showCreateClipDialog = false },
-                onSaveClip = { selectedVideo, clipTitle, durationSec ->
-                    showCreateClipDialog = false
-                    viewModel.saveCustomTitle(clipTitle)
-                    viewModel.selectTab(1)
-                    coroutineScope.launch {
-                        snackbarHostState.showSnackbar("Short created: $clipTitle")
-                    }
-                }
-            )
-        }
-
-        // Real-time Comments Bottom Sheet Modal
-        if (commentingVideo != null) {
-            CommentsSheet(
-                video = commentingVideo!!,
-                comments = activeComments,
-                onDismiss = { viewModel.closeComments() },
-                onPostComment = { comment ->
-                    viewModel.postComment(commentingVideo!!.id, comment)
-                    coroutineScope.launch {
-                        snackbarHostState.showSnackbar("Comment posted")
-                    }
-                },
-                onToggleLikeComment = { commentId ->
-                    viewModel.toggleCommentLike(commentId)
-                }
-            )
-        }
-
-        // Notifications Sheet
-        if (showNotificationsSheet) {
-            NotificationsSheet(
-                notifications = notificationsList,
-                allVideos = allVideos,
-                onNotificationClick = { notif ->
-                    viewModel.markNotificationAsRead(notif.id)
-                    notif.videoId?.let { vidId ->
-                        val matchingVideo = allVideos.find { it.id == vidId }
-                        if (matchingVideo != null) {
-                            viewModel.setNotificationsSheetOpen(false)
-                            viewModel.playVideo(matchingVideo)
-                        }
-                    }
-                },
-                onMarkAllAsRead = { viewModel.markAllNotificationsAsRead() },
-                onClearAll = { viewModel.clearAllNotifications() },
-                onDismiss = { viewModel.setNotificationsSheetOpen(false) }
-            )
-        }
-
-        // Offline Edit Profile Dialog
-        if (showEditProfileDialog) {
-            EditProfileDialog(
-                currentName = userName,
-                currentHandle = userHandle,
-                currentAvatarUri = userAvatarUri,
-                onDismiss = { viewModel.setEditProfileDialogOpen(false) },
-                onSave = { newName, newHandle, newAvatarUri ->
-                    viewModel.updateProfile(newName, newHandle, newAvatarUri)
-                    coroutineScope.launch {
-                        snackbarHostState.showSnackbar("Profile updated offline")
-                    }
-                }
-            )
-        }
-
-        // User-Created Offline Custom Page Screen
-        if (activeCustomPage != null) {
-            CustomPageRendererScreen(
-                page = activeCustomPage!!,
-                onBack = { viewModel.closeCustomPage() },
-                onNavigateToScreen = { tabIdx ->
-                    viewModel.closeCustomPage()
-                    viewModel.selectTab(tabIdx)
-                },
-                onOpenAnotherPage = { pageId ->
-                    viewModel.openCustomPageById(pageId)
-                },
-                modifier = Modifier.fillMaxSize()
-            )
-        }
-
-        // YouTube-Style Floating Draggable Mini Video Player (Floating on top of ALL screens)
-        if (currentlyPlaying != null && isPlayerMinimized && !isInPipMode) {
-            FloatingMiniPlayer(
-                video = currentlyPlaying!!,
-                isPaused = isPlaybackPaused,
-                onTogglePlayPause = { viewModel.togglePlaybackPaused() },
-                onExpand = { viewModel.expandPlayer() },
-                onClose = { viewModel.closePlayer() },
-                onProgressUpdate = { pos -> viewModel.recordProgress(currentlyPlaying!!, pos) },
-                onEnterPip = onEnterPip,
-                modifier = Modifier.fillMaxSize()
-            )
-        }
-
-        // Native YouTube-style Intro Splash Screen Overlay
-        if (showSplashScreen) {
-            YouTubeSplashScreen(
-                onAnimationComplete = { showSplashScreen = false }
-            )
-        }
-    }
+        appManager.cleanup()
     }
 }
